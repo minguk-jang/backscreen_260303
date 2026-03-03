@@ -431,56 +431,60 @@ export default function App() {
 
       <StatusBar message={status} />
 
-      <main className="layout-grid">
-        <QuickMonthlyEditor
-          monthKey={monthKey}
-          meals={monthlyMeals}
-          events={monthlyEvents}
-          onQuickAddEvent={onQuickAddEvent}
-          onQuickAddMeal={onQuickAddMeal}
-        />
+      <main className="dashboard-grid">
+        <section className="left-rail">
+          <QuickMonthlyEditor
+            monthKey={monthKey}
+            meals={monthlyMeals}
+            events={monthlyEvents}
+            onQuickAddEvent={onQuickAddEvent}
+            onQuickAddMeal={onQuickAddMeal}
+          />
 
-        <SchoolInfoPanel schoolInfo={state.schoolInfo} onChangeField={setSchoolField} />
+          <section className="panel">
+            <div className="panel-title-row">
+              <h2>급식 메뉴</h2>
+              <button onClick={addMeal}>날짜 추가</button>
+            </div>
+            <div className="list-body compact">
+              {state.meals.map((meal) => (
+                <MealEditor key={meal.id} meal={meal} onChange={(entry) => updateMeal(meal.id, entry)} onDelete={() => deleteMeal(meal.id)} />
+              ))}
+              {state.meals.length === 0 && <p className="empty">등록된 급식이 없습니다.</p>}
+            </div>
+          </section>
 
-        <TimetablePanel
-          timetable={state.timetable}
-          onAddSlot={addSlot}
-          onUpdateSlot={updateSlot}
-          onDeleteSlot={deleteSlot}
-        />
-
-        <section className="panel">
-          <div className="panel-title-row">
-            <h2>급식 메뉴</h2>
-            <button onClick={addMeal}>날짜 추가</button>
-          </div>
-          <div className="list-body compact">
-            {state.meals.map((meal) => (
-              <MealEditor key={meal.id} meal={meal} onChange={(entry) => updateMeal(meal.id, entry)} onDelete={() => deleteMeal(meal.id)} />
-            ))}
-            {state.meals.length === 0 && <p className="empty">등록된 급식이 없습니다.</p>}
-          </div>
+          <section className="panel">
+            <div className="panel-title-row">
+              <h2>캘린더/행사</h2>
+              <button onClick={addEvent}>일정 추가</button>
+            </div>
+            <div className="list-body compact">
+              {state.events.map((eventEntry) => (
+                <EventEditor
+                  key={eventEntry.id}
+                  entry={eventEntry}
+                  onChange={(entry) => updateEvent(eventEntry.id, entry)}
+                  onDelete={() => deleteEvent(eventEntry.id)}
+                />
+              ))}
+              {state.events.length === 0 && <p className="empty">등록된 일정이 없습니다.</p>}
+            </div>
+          </section>
         </section>
 
-        <section className="panel">
-          <div className="panel-title-row">
-            <h2>캘린더/행사</h2>
-            <button onClick={addEvent}>일정 추가</button>
-          </div>
-          <div className="list-body compact">
-            {state.events.map((eventEntry) => (
-              <EventEditor
-                key={eventEntry.id}
-                entry={eventEntry}
-                onChange={(entry) => updateEvent(eventEntry.id, entry)}
-                onDelete={() => deleteEvent(eventEntry.id)}
-              />
-            ))}
-            {state.events.length === 0 && <p className="empty">등록된 일정이 없습니다.</p>}
-          </div>
-        </section>
+        <section className="right-rail">
+          <SchoolInfoPanel schoolInfo={state.schoolInfo} onChangeField={setSchoolField} />
 
-        <ThemePanel theme={state.theme} onChangeTheme={setThemeField} />
+          <TimetablePanel
+            timetable={state.timetable}
+            onAddSlot={addSlot}
+            onUpdateSlot={updateSlot}
+            onDeleteSlot={deleteSlot}
+          />
+
+          <ThemePanel theme={state.theme} onChangeTheme={setThemeField} />
+        </section>
       </main>
     </div>
   );
