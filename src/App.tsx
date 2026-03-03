@@ -4,8 +4,12 @@ import { listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import { QuickMonthlyEditor } from "./components/QuickMonthlyEditor";
+import { SchoolInfoPanel } from "./components/SchoolInfoPanel";
 import { SetupChecklist } from "./components/SetupChecklist";
-import { defaultState, weekdayOptions } from "./defaults";
+import { StatusBar } from "./components/StatusBar";
+import { ThemePanel } from "./components/ThemePanel";
+import { TimetablePanel } from "./components/TimetablePanel";
+import { defaultState } from "./defaults";
 import { getCurrentClass } from "./currentClass";
 import { renderWallpaperImage } from "./renderWallpaper";
 import type { AppState, EventEntry, MealEntry, TimetableSlot, Weekday } from "./types";
@@ -20,21 +24,12 @@ interface ScreenSize {
   height: number;
 }
 
-const weekdayLabel: Record<Weekday, string> = {
-  mon: "월",
-  tue: "화",
-  wed: "수",
-  thu: "목",
-  fri: "금"
-};
-
 function deepCloneState(state: AppState): AppState {
   return JSON.parse(JSON.stringify(state)) as AppState;
 }
 
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState);
-  const [selectedDay, setSelectedDay] = useState<Weekday>("mon");
   const [isLoaded, setIsLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("초기화 중...");
@@ -153,28 +148,28 @@ export default function App() {
     }));
   };
 
-  const updateSlot = (slotId: string, key: keyof TimetableSlot, value: string): void => {
+  const updateSlot = (day: Weekday, slotId: string, key: keyof TimetableSlot, value: string): void => {
     setState((prev) => ({
       ...prev,
       timetable: {
         ...prev.timetable,
-        [selectedDay]: prev.timetable[selectedDay].map((slot) =>
+        [day]: prev.timetable[day].map((slot) =>
           slot.id === slotId ? { ...slot, [key]: value } : slot
         )
       }
     }));
   };
 
-  const addSlot = (): void => {
+  const addSlot = (day: Weekday): void => {
     setState((prev) => ({
       ...prev,
       timetable: {
         ...prev.timetable,
-        [selectedDay]: [
-          ...prev.timetable[selectedDay],
+        [day]: [
+          ...prev.timetable[day],
           {
             id: crypto.randomUUID(),
-            periodLabel: `${prev.timetable[selectedDay].length + 1}교시`,
+            periodLabel: `${prev.timetable[day].length + 1}교시`,
             subject: "",
             start: "09:00",
             end: "09:40"
@@ -184,12 +179,22 @@ export default function App() {
     }));
   };
 
-  const deleteSlot = (slotId: string): void => {
+  const deleteSlot = (day: Weekday, slotId: string): void => {
     setState((prev) => ({
       ...prev,
       timetable: {
         ...prev.timetable,
-        [selectedDay]: prev.timetable[selectedDay].filter((slot) => slot.id !== slotId)
+        [day]: prev.timetable[day].filter((slot) => slot.id !== slotId)
+      }
+    }));
+  };
+
+  const setThemeField = (field: keyof AppState["theme"], value: string): void => {
+    setState((prev) => ({
+      ...prev,
+      theme: {
+        ...prev.theme,
+        [field]: value
       }
     }));
   };
@@ -424,7 +429,7 @@ export default function App() {
         </label>
       </section>
 
-      <p className="status-line">{status}</p>
+      <StatusBar message={status} />
 
       <main className="layout-grid">
         <QuickMonthlyEditor
@@ -435,67 +440,14 @@ export default function App() {
           onQuickAddMeal={onQuickAddMeal}
         />
 
-        <section className="panel">
-          <h2>학교 정보</h2>
-          <div className="field-grid two-col">
-            <label>
-              학교명
-              <input
-                value={state.schoolInfo.schoolName}
-                onChange={(event) => setSchoolField("schoolName", event.target.value)}
-                placeholder="예: 새봄초등학교"
-              />
-            </label>
-            <label>
-              학급명
-              <input
-                value={state.schoolInfo.className}
-                onChange={(event) => setSchoolField("className", event.target.value)}
-                placeholder="예: 5학년 1반"
-              />
-            </label>
-          </div>
-        </section>
+        <SchoolInfoPanel schoolInfo={state.schoolInfo} onChangeField={setSchoolField} />
 
-        <section className="panel">
-          <div className="panel-title-row">
-            <h2>시간표</h2>
-            <button onClick={addSlot}>교시 추가</button>
-          </div>
-          <div className="day-tabs">
-            {weekdayOptions.map((day) => (
-              <button
-                key={day.key}
-                className={selectedDay === day.key ? "active" : ""}
-                onClick={() => setSelectedDay(day.key)}
-              >
-                {day.label}요일
-              </button>
-            ))}
-          </div>
-
-          <div className="list-body">
-            {state.timetable[selectedDay].map((slot) => (
-              <div className="list-row timetable-row" key={slot.id}>
-                <input
-                  value={slot.periodLabel}
-                  onChange={(event) => updateSlot(slot.id, "periodLabel", event.target.value)}
-                />
-                <input
-                  value={slot.subject}
-                  onChange={(event) => updateSlot(slot.id, "subject", event.target.value)}
-                  placeholder="과목"
-                />
-                <input type="time" value={slot.start} onChange={(event) => updateSlot(slot.id, "start", event.target.value)} />
-                <input type="time" value={slot.end} onChange={(event) => updateSlot(slot.id, "end", event.target.value)} />
-                <button className="danger" onClick={() => deleteSlot(slot.id)}>
-                  삭제
-                </button>
-              </div>
-            ))}
-            {state.timetable[selectedDay].length === 0 && <p className="empty">{weekdayLabel[selectedDay]}요일 교시 없음</p>}
-          </div>
-        </section>
+        <TimetablePanel
+          timetable={state.timetable}
+          onAddSlot={addSlot}
+          onUpdateSlot={updateSlot}
+          onDeleteSlot={deleteSlot}
+        />
 
         <section className="panel">
           <div className="panel-title-row">
@@ -528,76 +480,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="panel">
-          <h2>테마</h2>
-          <div className="field-grid five-col">
-            <label>
-              배경색
-              <input
-                type="color"
-                value={state.theme.background}
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    theme: { ...prev.theme, background: event.target.value }
-                  }))
-                }
-              />
-            </label>
-            <label>
-              패널색
-              <input
-                type="color"
-                value={state.theme.panel}
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    theme: { ...prev.theme, panel: event.target.value }
-                  }))
-                }
-              />
-            </label>
-            <label>
-              카드색
-              <input
-                type="color"
-                value={state.theme.panelAlt}
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    theme: { ...prev.theme, panelAlt: event.target.value }
-                  }))
-                }
-              />
-            </label>
-            <label>
-              글자색
-              <input
-                type="color"
-                value={state.theme.primaryText}
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    theme: { ...prev.theme, primaryText: event.target.value }
-                  }))
-                }
-              />
-            </label>
-            <label>
-              강조색
-              <input
-                type="color"
-                value={state.theme.accent}
-                onChange={(event) =>
-                  setState((prev) => ({
-                    ...prev,
-                    theme: { ...prev.theme, accent: event.target.value }
-                  }))
-                }
-              />
-            </label>
-          </div>
-        </section>
+        <ThemePanel theme={state.theme} onChangeTheme={setThemeField} />
       </main>
     </div>
   );
