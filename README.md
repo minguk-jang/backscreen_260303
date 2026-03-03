@@ -49,6 +49,17 @@ npm run tauri build
 
 빌드 시 `src-tauri/tauri.conf.json`의 NSIS 설정을 사용해 Windows 설치형 산출물이 생성됩니다.
 
+## 비개발자 배포용 패키지 만들기
+
+```bash
+npm run tauri build
+npm run release:bundle -- 0.1.0
+```
+
+- 결과 폴더: `release/v0.1.0-YYYY-MM-DD/`
+- 전달 파일: `BackScreen_Setup_v0.1.0.exe` + `설치안내.txt`
+- 운영 가이드: `distribution/RELEASE_WORKFLOW_KO.md`
+
 ## 데이터 저장 위치
 
 Tauri 앱 데이터 디렉터리 하위 `backscreen` 폴더를 사용합니다.
