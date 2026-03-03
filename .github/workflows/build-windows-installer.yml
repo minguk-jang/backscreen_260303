@@ -2,6 +2,11 @@ name: Build Windows Installer
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.1). Leave empty to use package.json version."
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -29,8 +34,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Resolve release version
+        id: meta
+        shell: pwsh
+        run: |
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $version = "${{ github.ref_name }}".Substring(1)
+          } elseif ("${{ github.event.inputs.version }}" -ne "") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            $version = node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version"
+          }
+
+          if ($version -match '[^0-9A-Za-z\.\-_]') {
+            throw "Invalid version format: $version"
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Build Windows installer
-        run: npm run tauri build
+        run: npm run tauri build -- --bundles nsis
 
       - name: Locate NSIS installer
         id: locate
@@ -47,15 +70,64 @@ jobs:
           "exe_path=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "exe_name=$($installer.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      - name: Upload artifact
+      - name: Package delivery files
+        id: package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.meta.outputs.version }}"
+          $releaseDir = Join-Path $env:RUNNER_TEMP "backscreen-release-v$version"
+          $targetExeName = "BackScreen_Setup_v$version.exe"
+          $targetExePath = Join-Path $releaseDir $targetExeName
+          $guideSource = "distribution/INSTALL_GUIDE_KO.txt"
+          $guideTarget = Join-Path $releaseDir "INSTALL_GUIDE_KO.txt"
+          $zipPath = Join-Path $env:RUNNER_TEMP "BackScreen_Release_v$version.zip"
+
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+          Copy-Item "${{ steps.locate.outputs.exe_path }}" $targetExePath
+
+          if (Test-Path $guideSource) {
+            Copy-Item $guideSource $guideTarget
+          }
+
+          $hash = (Get-FileHash $targetExePath -Algorithm SHA256).Hash.ToLower()
+          "$hash  $targetExeName" | Set-Content -Path "$targetExePath.sha256" -Encoding utf8
+
+          @"
+BackScreen v$version delivery package
+
+Included files:
+- $targetExeName
+- $targetExeName.sha256
+- INSTALL_GUIDE_KO.txt
+"@ | Set-Content -Path (Join-Path $releaseDir "RELEASE_NOTES.txt") -Encoding utf8
+
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipPath
+
+          "release_dir=$releaseDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "target_exe_path=$targetExePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload artifact (zip package)
         uses: actions/upload-artifact@v4
         with:
-          name: BackScreen-Windows-Installer
-          path: ${{ steps.locate.outputs.exe_path }}
+          name: BackScreen-Release-Package-v${{ steps.meta.outputs.version }}
+          path: ${{ steps.package.outputs.zip_path }}
+
+      - name: Upload artifact (expanded files)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BackScreen-Release-Files-v${{ steps.meta.outputs.version }}
+          path: ${{ steps.package.outputs.release_dir }}
 
       - name: Attach installer to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.locate.outputs.exe_path }}
+          files: |
+            ${{ steps.package.outputs.target_exe_path }}
+            ${{ steps.package.outputs.target_exe_path }}.sha256
+            ${{ steps.package.outputs.zip_path }}
           generate_release_notes: true

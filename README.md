@@ -51,6 +51,14 @@ npm run tauri build
 
 ## 비개발자 배포용 패키지 만들기
 
+### 권장: GitHub Actions로 Windows 설치파일 생성
+
+- GitHub `Actions` -> `Build Windows Installer` -> `Run workflow`
+- 완료 후 Artifact에서 `BackScreen-Release-Package-v<version>.zip` 다운로드
+- zip 안의 `BackScreen_Setup_v<version>.exe`와 `INSTALL_GUIDE_KO.txt`를 전달
+
+### 로컬 Windows 빌드
+
 ```bash
 npm run tauri build
 npm run release:bundle -- 0.1.0

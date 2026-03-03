@@ -6,6 +6,17 @@
 
 ## 1) 설치 파일 생성
 
+### 방법 A: GitHub Actions 권장 (Mac 사용자 포함)
+
+1. GitHub 저장소 -> `Actions` 탭 -> `Build Windows Installer` 선택
+2. `Run workflow` 클릭
+3. 필요 시 version 입력 (예: `0.1.1`), 비우면 `package.json` 버전 사용
+4. 완료 후 Artifacts에서 아래 중 하나 다운로드
+   - `BackScreen-Release-Package-v<version>`: 전달용 zip 1개
+   - `BackScreen-Release-Files-v<version>`: exe/sha256/안내문 개별 파일
+
+### 방법 B: 로컬(Windows) 빌드
+
 ```bash
 npm run tauri build
 ./scripts/make-release-bundle.sh 0.1.0
@@ -51,8 +62,9 @@ npm run tauri build
 
 ## 5) 운영 체크리스트
 
-- [ ] `npm run tauri build` 성공
-- [ ] `release/` 폴더에 exe + sha256 생성 확인
+- [ ] (권장) GitHub Actions `Build Windows Installer` 성공
+- [ ] Artifacts에서 전달용 zip 또는 파일 다운로드
+- [ ] 산출물에 exe + sha256 포함 확인 (Actions artifact 또는 `release/` 폴더)
 - [ ] 설치안내.txt 포함 확인
 - [ ] 기존 다운로드 링크를 최신 파일로 갱신
 - [ ] 공지 템플릿으로 사용자 안내 발송
