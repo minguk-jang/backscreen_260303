@@ -3,10 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
+import { SetupChecklist } from "./components/SetupChecklist";
 import { defaultState, weekdayOptions } from "./defaults";
 import { getCurrentClass } from "./currentClass";
 import { renderWallpaperImage } from "./renderWallpaper";
 import type { AppState, EventEntry, MealEntry, TimetableSlot, Weekday } from "./types";
+import { buildSetupChecklist } from "./utils/checklist";
 import { validateState } from "./utils/validation";
 
 dayjs.locale("ko");
@@ -35,9 +37,14 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("초기화 중...");
   const [now, setNow] = useState(dayjs());
+  const [hasAppliedOnce, setHasAppliedOnce] = useState(false);
   const stateRef = useRef(state);
 
   const currentClass = useMemo(() => getCurrentClass(state, now), [state, now]);
+  const setupChecklist = useMemo(
+    () => buildSetupChecklist(state, now.format("YYYY-MM-DD"), hasAppliedOnce),
+    [state, now, hasAppliedOnce]
+  );
 
   useEffect(() => {
     stateRef.current = state;
@@ -269,6 +276,7 @@ export default function App() {
       throw new Error("이미지 인코딩 실패");
     }
     await invoke("apply_wallpaper_image", { pngBase64 });
+    setHasAppliedOnce(true);
   };
 
   const onSaveAndApply = async (): Promise<void> => {
@@ -332,6 +340,12 @@ export default function App() {
           <span>{currentClass ? `${currentClass.subject} 수업 중` : "수업 시간이 아닙니다"}</span>
         </div>
       </header>
+
+      <SetupChecklist
+        items={setupChecklist.items}
+        completed={setupChecklist.completed}
+        total={setupChecklist.total}
+      />
 
       <section className="actions-row">
         <button disabled={saving} onClick={() => void saveState()}>
