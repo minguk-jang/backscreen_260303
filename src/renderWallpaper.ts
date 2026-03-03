@@ -1,25 +1,29 @@
 import dayjs from "dayjs";
-import type { AppState } from "./types";
+import type { AppState, EventEntry } from "./types";
 import { getCurrentClass } from "./currentClass";
 import { weekdayOptions } from "./defaults";
+import { limitItems } from "./wallpaper/sectionCapacity";
+import { computeLayout, type Rect, type WallpaperLayout } from "./wallpaper/layout";
+import { fitText } from "./wallpaper/textFit";
 
 const FONT_HEADING = '"Jua", "Gowun Dodum", "Segoe UI", sans-serif';
 const FONT_BODY = '"Gowun Dodum", "Pretendard", "Segoe UI", sans-serif';
+const WEEK_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
-function safeList(items: string[]): string[] {
-  return items.filter((item) => item.trim().length > 0).slice(0, 7);
+interface CalendarCell {
+  isoDate: string;
+  dayNumber: number;
+  inMonth: boolean;
+  isToday: boolean;
+  hasEvent: boolean;
 }
 
-function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) {
-    return text;
-  }
+export function getWallpaperLayout(width: number, height: number): WallpaperLayout {
+  return computeLayout(width, height);
+}
 
-  let result = text;
-  while (result.length > 1 && ctx.measureText(`${result}…`).width > maxWidth) {
-    result = result.slice(0, -1);
-  }
-  return `${result}…`;
+function safeList(items: string[]): string[] {
+  return items.filter((item) => item.trim().length > 0).slice(0, 50);
 }
 
 function fillBackdrop(ctx: CanvasRenderingContext2D, width: number, height: number, background: string): void {
@@ -48,6 +52,490 @@ function fillBackdrop(ctx: CanvasRenderingContext2D, width: number, height: numb
   ctx.fillRect(0, 0, width, height);
 }
 
+interface DrawFitOptions {
+  text: string;
+  x: number;
+  y: number;
+  maxWidth: number;
+  maxFont: number;
+  minFont: number;
+  family: string;
+  weight?: number;
+  color: string;
+  align?: CanvasTextAlign;
+}
+
+function setCanvasFont(
+  ctx: CanvasRenderingContext2D,
+  fontSize: number,
+  family: string,
+  fontWeight: number
+): void {
+  ctx.font = `${fontWeight} ${Math.max(1, Math.round(fontSize))}px ${family}`;
+}
+
+function drawFittedText(ctx: CanvasRenderingContext2D, opts: DrawFitOptions): { text: string; fontSize: number } {
+  if (opts.maxWidth <= 0) {
+    return { text: "", fontSize: opts.minFont };
+  }
+
+  const measure = (value: string, size: number): number => {
+    setCanvasFont(ctx, size, opts.family, opts.weight ?? 400);
+    return ctx.measureText(value).width;
+  };
+
+  const fitted = fitText(opts.text, {
+    maxWidth: opts.maxWidth,
+    maxFont: opts.maxFont,
+    minFont: opts.minFont,
+    measure
+  });
+
+  setCanvasFont(ctx, fitted.fontSize, opts.family, opts.weight ?? 400);
+  ctx.fillStyle = opts.color;
+  ctx.textAlign = opts.align ?? "left";
+  ctx.fillText(fitted.text, opts.x, opts.y);
+
+  return fitted;
+}
+
+function drawPanelShell(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  title: string,
+  theme: AppState["theme"]
+): Rect {
+  ctx.fillStyle = `${theme.panel}f3`;
+  roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 18, true, false);
+
+  drawFittedText(ctx, {
+    text: title,
+    x: rect.x + rect.w / 2,
+    y: rect.y + 44,
+    maxWidth: rect.w - 30,
+    maxFont: Math.min(38, Math.max(22, rect.w * 0.08)),
+    minFont: 16,
+    family: FONT_HEADING,
+    weight: 700,
+    color: theme.accent,
+    align: "center"
+  });
+
+  ctx.strokeStyle = `${theme.accent}52`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + 16, rect.y + 62);
+  ctx.lineTo(rect.x + rect.w - 16, rect.y + 62);
+  ctx.stroke();
+
+  return {
+    x: rect.x + 14,
+    y: rect.y + 70,
+    w: rect.w - 28,
+    h: rect.h - 82
+  };
+}
+
+function drawHeaderSection(
+  ctx: CanvasRenderingContext2D,
+  header: Rect,
+  state: AppState,
+  now: dayjs.Dayjs,
+  currentLabel: string
+): void {
+  ctx.fillStyle = `${state.theme.panel}ec`;
+  roundRect(ctx, header.x, header.y, header.w, header.h, 24, true, false);
+
+  const paddedX = header.x + 22;
+  const paddedW = header.w - 44;
+
+  drawFittedText(ctx, {
+    text: now.format("M월 D일 (ddd) HH:mm"),
+    x: header.x + header.w / 2,
+    y: header.y + Math.max(62, header.h * 0.28),
+    maxWidth: paddedW,
+    maxFont: Math.min(78, Math.max(34, header.w * 0.043)),
+    minFont: 22,
+    family: FONT_HEADING,
+    weight: 700,
+    color: state.theme.accent,
+    align: "center"
+  });
+
+  const schoolLine = `${state.schoolInfo.schoolName} ${state.schoolInfo.className}`.trim() || "학교/학급 정보 미입력";
+
+  drawFittedText(ctx, {
+    text: schoolLine,
+    x: header.x + header.w / 2,
+    y: header.y + Math.max(106, header.h * 0.47),
+    maxWidth: paddedW,
+    maxFont: Math.min(30, Math.max(18, header.w * 0.02)),
+    minFont: 14,
+    family: FONT_BODY,
+    weight: 500,
+    color: darkenHex(state.theme.primaryText, 0.18),
+    align: "center"
+  });
+
+  const currentCardH = Math.max(52, Math.min(110, header.h * 0.34));
+  const currentCardY = header.y + header.h - currentCardH - 16;
+
+  ctx.fillStyle = state.theme.panelAlt;
+  roundRect(ctx, paddedX, currentCardY, paddedW, currentCardH, 18, true, false);
+
+  drawFittedText(ctx, {
+    text: currentLabel,
+    x: header.x + header.w / 2,
+    y: currentCardY + currentCardH / 2 + Math.max(7, currentCardH * 0.08),
+    maxWidth: paddedW - 24,
+    maxFont: Math.min(36, Math.max(18, header.w * 0.023)),
+    minFont: 13,
+    family: FONT_HEADING,
+    weight: 700,
+    color: state.theme.accent,
+    align: "center"
+  });
+}
+
+function drawTimetableSection(
+  ctx: CanvasRenderingContext2D,
+  body: Rect,
+  state: AppState,
+  now: dayjs.Dayjs
+): void {
+  const todayWeekday = weekdayOptions[(now.day() + 6) % 7];
+  const dayKey = todayWeekday?.key;
+  const todaySlots = dayKey ? state.timetable[dayKey] ?? [] : [];
+
+  ctx.textAlign = "left";
+
+  const rowGap = 8;
+  const rowMinH = 58;
+  const reserveBottom = 24;
+  const maxRows = Math.max(0, Math.floor((body.h - reserveBottom + rowGap) / (rowMinH + rowGap)));
+  const limited = limitItems(todaySlots, maxRows);
+
+  if (limited.visible.length === 0) {
+    drawFittedText(ctx, {
+      text: "오늘 수업 정보 없음",
+      x: body.x + 4,
+      y: body.y + 32,
+      maxWidth: body.w - 8,
+      maxFont: 20,
+      minFont: 13,
+      family: FONT_BODY,
+      weight: 500,
+      color: state.theme.primaryText
+    });
+    return;
+  }
+
+  const rows = limited.visible.length;
+  const dynamicH = (body.h - rowGap * (rows - 1) - (limited.hidden > 0 ? 22 : 0)) / rows;
+  const rowH = Math.max(rowMinH, Math.min(84, dynamicH));
+
+  let y = body.y;
+  for (const slot of limited.visible) {
+    ctx.fillStyle = state.theme.panelAlt;
+    roundRect(ctx, body.x, y, body.w, rowH, 12, true, false);
+
+    drawFittedText(ctx, {
+      text: `${slot.periodLabel} ${slot.subject}`.trim(),
+      x: body.x + 10,
+      y: y + Math.max(30, rowH * 0.48),
+      maxWidth: body.w - 20,
+      maxFont: 24,
+      minFont: 12,
+      family: FONT_HEADING,
+      weight: 700,
+      color: state.theme.accent
+    });
+
+    drawFittedText(ctx, {
+      text: `${slot.start} ~ ${slot.end}`,
+      x: body.x + 10,
+      y: y + Math.max(50, rowH * 0.8),
+      maxWidth: body.w - 20,
+      maxFont: 20,
+      minFont: 11,
+      family: FONT_BODY,
+      weight: 500,
+      color: state.theme.primaryText
+    });
+
+    y += rowH + rowGap;
+  }
+
+  if (limited.hidden > 0) {
+    drawFittedText(ctx, {
+      text: `+${limited.hidden}개 더 있음`,
+      x: body.x + 4,
+      y: Math.min(body.y + body.h - 4, y + 14),
+      maxWidth: body.w - 8,
+      maxFont: 16,
+      minFont: 11,
+      family: FONT_BODY,
+      weight: 500,
+      color: darkenHex(state.theme.primaryText, 0.08)
+    });
+  }
+}
+
+function drawMealsSection(
+  ctx: CanvasRenderingContext2D,
+  body: Rect,
+  state: AppState,
+  now: dayjs.Dayjs,
+  mealsTodayItems: string[]
+): void {
+  ctx.textAlign = "left";
+
+  drawFittedText(ctx, {
+    text: now.format("M/D(ddd)"),
+    x: body.x,
+    y: body.y + 18,
+    maxWidth: body.w,
+    maxFont: 22,
+    minFont: 12,
+    family: FONT_BODY,
+    weight: 700,
+    color: state.theme.primaryText
+  });
+
+  const chipYStart = body.y + 36;
+  const chipH = 30;
+  const chipGap = 7;
+  const available = Math.max(0, body.h - (chipYStart - body.y));
+  const maxCount = Math.max(0, Math.floor((available + chipGap) / (chipH + chipGap)));
+  const source = mealsTodayItems.length > 0 ? mealsTodayItems : ["등록된 급식 정보 없음"];
+  const limited = limitItems(source, maxCount);
+
+  let y = chipYStart;
+  for (const item of limited.visible) {
+    ctx.fillStyle = `${state.theme.accent}4f`;
+    roundRect(ctx, body.x, y - 18, body.w, chipH, 8, true, false);
+
+    drawFittedText(ctx, {
+      text: item,
+      x: body.x + 8,
+      y,
+      maxWidth: body.w - 16,
+      maxFont: 20,
+      minFont: 11,
+      family: FONT_BODY,
+      weight: 500,
+      color: state.theme.primaryText
+    });
+
+    y += chipH + chipGap;
+  }
+
+  if (limited.hidden > 0) {
+    drawFittedText(ctx, {
+      text: `+${limited.hidden}개 더 있음`,
+      x: body.x,
+      y: Math.min(body.y + body.h - 4, y + 8),
+      maxWidth: body.w,
+      maxFont: 16,
+      minFont: 11,
+      family: FONT_BODY,
+      weight: 500,
+      color: darkenHex(state.theme.primaryText, 0.08)
+    });
+  }
+}
+
+function buildCalendarCells(now: dayjs.Dayjs, eventDates: Set<string>): CalendarCell[] {
+  const monthStart = now.startOf("month");
+  const gridStart = monthStart.startOf("week");
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = gridStart.add(index, "day");
+    const isoDate = date.format("YYYY-MM-DD");
+
+    return {
+      isoDate,
+      dayNumber: date.date(),
+      inMonth: date.month() === now.month(),
+      isToday: date.isSame(now, "day"),
+      hasEvent: eventDates.has(isoDate)
+    };
+  });
+}
+
+function drawMonthlyCalendar(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  state: AppState,
+  now: dayjs.Dayjs,
+  eventDates: Set<string>
+): number {
+  const titleColor = darkenHex(state.theme.primaryText, 0.1);
+
+  drawFittedText(ctx, {
+    text: `${now.format("YYYY년 M월")}`,
+    x: rect.x,
+    y: rect.y + 18,
+    maxWidth: rect.w,
+    maxFont: 22,
+    minFont: 12,
+    family: FONT_BODY,
+    weight: 700,
+    color: titleColor
+  });
+
+  const weekLabelY = rect.y + 42;
+  const colGap = 4;
+  const rowGap = 4;
+  const cellW = (rect.w - colGap * 6) / 7;
+  const calendarTop = weekLabelY + 10;
+  const calendarHeight = Math.max(120, Math.min(rect.h * 0.58, 220));
+  const cellH = (calendarHeight - rowGap * 5) / 6;
+
+  WEEK_LABELS.forEach((label, index) => {
+    const x = rect.x + index * (cellW + colGap) + cellW / 2;
+    drawFittedText(ctx, {
+      text: label,
+      x,
+      y: weekLabelY,
+      maxWidth: cellW,
+      maxFont: 16,
+      minFont: 10,
+      family: FONT_BODY,
+      weight: 700,
+      color: titleColor,
+      align: "center"
+    });
+  });
+
+  const cells = buildCalendarCells(now, eventDates);
+
+  cells.forEach((cell, index) => {
+    const row = Math.floor(index / 7);
+    const col = index % 7;
+
+    const x = rect.x + col * (cellW + colGap);
+    const y = calendarTop + row * (cellH + rowGap);
+
+    const bg = cell.inMonth ? `${state.theme.panelAlt}ef` : "rgba(255,255,255,0.58)";
+    ctx.fillStyle = bg;
+    roundRect(ctx, x, y, cellW, cellH, 8, true, false);
+
+    if (cell.isToday) {
+      ctx.strokeStyle = state.theme.accent;
+      ctx.lineWidth = 2;
+      roundRect(ctx, x + 1, y + 1, cellW - 2, cellH - 2, 7, false, true);
+    }
+
+    const textColor = cell.inMonth ? state.theme.primaryText : lightenHex(state.theme.primaryText, 0.2);
+
+    drawFittedText(ctx, {
+      text: String(cell.dayNumber),
+      x: x + 6,
+      y: y + 16,
+      maxWidth: cellW - 14,
+      maxFont: 16,
+      minFont: 9,
+      family: FONT_BODY,
+      weight: cell.isToday ? 700 : 500,
+      color: textColor
+    });
+
+    if (cell.hasEvent && cell.inMonth) {
+      ctx.fillStyle = state.theme.accent;
+      roundRect(ctx, x + cellW - 11, y + cellH - 11, 6, 6, 3, true, false);
+    }
+  });
+
+  return calendarTop + 6 * cellH + 5 * rowGap + 14;
+}
+
+function drawEventCards(
+  ctx: CanvasRenderingContext2D,
+  body: Rect,
+  state: AppState,
+  now: dayjs.Dayjs,
+  monthlyEvents: EventEntry[],
+  cardsTop: number
+): void {
+  const available = Math.max(0, body.y + body.h - cardsTop);
+  const cardGap = 8;
+  const cardH = 58;
+  const maxCards = Math.max(0, Math.floor((available + cardGap) / (cardH + cardGap)));
+
+  const source = monthlyEvents.length === 0
+    ? [{
+      id: "empty",
+      date: now.format("YYYY-MM-DD"),
+      title: "등록된 일정 없음",
+      details: "",
+      color: state.theme.accent
+    }]
+    : monthlyEvents;
+
+  const limited = limitItems(source, maxCards);
+
+  let y = cardsTop;
+  for (const event of limited.visible) {
+    ctx.fillStyle = `${event.color}24`;
+    roundRect(ctx, body.x, y - 20, body.w, cardH, 10, true, false);
+
+    drawFittedText(ctx, {
+      text: `${dayjs(event.date).format("M/D")} ${event.title}`.trim(),
+      x: body.x + 8,
+      y,
+      maxWidth: body.w - 16,
+      maxFont: 18,
+      minFont: 11,
+      family: FONT_HEADING,
+      weight: 700,
+      color: darkenHex(event.color, 0.06)
+    });
+
+    drawFittedText(ctx, {
+      text: event.details.trim().length > 0 ? event.details : "상세 없음",
+      x: body.x + 8,
+      y: y + 20,
+      maxWidth: body.w - 16,
+      maxFont: 14,
+      minFont: 10,
+      family: FONT_BODY,
+      weight: 500,
+      color: state.theme.primaryText
+    });
+
+    y += cardH + cardGap;
+  }
+
+  if (limited.hidden > 0) {
+    drawFittedText(ctx, {
+      text: `+${limited.hidden}개 더 있음`,
+      x: body.x,
+      y: Math.min(body.y + body.h - 4, y + 6),
+      maxWidth: body.w,
+      maxFont: 16,
+      minFont: 11,
+      family: FONT_BODY,
+      weight: 500,
+      color: darkenHex(state.theme.primaryText, 0.08)
+    });
+  }
+}
+
+function drawEventsSection(
+  ctx: CanvasRenderingContext2D,
+  body: Rect,
+  state: AppState,
+  now: dayjs.Dayjs,
+  monthlyEvents: EventEntry[]
+): void {
+  ctx.textAlign = "left";
+
+  const eventDates = new Set(monthlyEvents.map((event) => event.date));
+  const cardsTop = drawMonthlyCalendar(ctx, body, state, now, eventDates);
+  drawEventCards(ctx, body, state, now, monthlyEvents, cardsTop);
+}
+
 export function renderWallpaperImage(state: AppState, width: number, height: number): string {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -62,141 +550,28 @@ export function renderWallpaperImage(state: AppState, width: number, height: num
   const monthKey = now.format("YYYY-MM");
 
   const mealsToday = state.meals.find((entry) => entry.date === today);
+  const mealsTodayItems = mealsToday ? safeList(mealsToday.items) : [];
   const monthlyEvents = state.events
     .filter((entry) => entry.date.startsWith(monthKey))
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(0, 5);
+    .sort((a, b) => a.date.localeCompare(b.date));
   const current = getCurrentClass(state, now);
 
   fillBackdrop(ctx, width, height, state.theme.background);
 
-  const margin = Math.max(28, width * 0.022);
-  const panelGap = Math.max(14, width * 0.013);
-  const topHeight = Math.max(220, height * 0.27);
-
-  ctx.fillStyle = `${state.theme.panel}ec`;
-  roundRect(ctx, margin, margin, width - margin * 2, topHeight - 22, 24, true, false);
-
-  ctx.fillStyle = state.theme.accent;
-  ctx.font = `700 ${Math.round(width * 0.042)}px ${FONT_HEADING}`;
-  ctx.textAlign = "center";
-  ctx.fillText(now.format("M월 D일 (ddd) HH:mm"), width / 2, margin + 64);
-
-  ctx.fillStyle = darkenHex(state.theme.primaryText, 0.18);
-  ctx.font = `${Math.round(width * 0.016)}px ${FONT_BODY}`;
-  ctx.fillText(`${state.schoolInfo.schoolName} ${state.schoolInfo.className}`.trim(), width / 2, margin + 106);
-
-  ctx.fillStyle = state.theme.panelAlt;
-  roundRect(ctx, margin + 20, margin + 126, width - margin * 2 - 40, topHeight - 168, 20, true, false);
-
-  ctx.fillStyle = state.theme.accent;
-  ctx.font = `700 ${Math.round(width * 0.024)}px ${FONT_HEADING}`;
+  const layout = computeLayout(width, height);
   const currentLabel = current ? `${current.subject} 수업 중입니다.` : "현재 수업 시간이 아닙니다.";
-  ctx.fillText(currentLabel, width / 2, margin + 184);
 
-  const bodyY = margin + topHeight;
-  const bodyHeight = height - bodyY - margin;
-  const colWidth = (width - margin * 2 - panelGap * 2) / 3;
+  drawHeaderSection(ctx, layout.header, state, now, currentLabel);
 
-  drawPanel(ctx, margin, bodyY, colWidth, bodyHeight, "요일별 시간표", state.theme);
-  drawPanel(ctx, margin + colWidth + panelGap, bodyY, colWidth, bodyHeight, "급식 메뉴", state.theme);
-  drawPanel(ctx, margin + (colWidth + panelGap) * 2, bodyY, colWidth, bodyHeight, "학교 교육 활동", state.theme);
+  const timetableBody = drawPanelShell(ctx, layout.columns[0], "요일별 시간표", state.theme);
+  const mealsBody = drawPanelShell(ctx, layout.columns[1], "급식 메뉴", state.theme);
+  const eventsBody = drawPanelShell(ctx, layout.columns[2], "학교 교육 활동", state.theme);
 
-  let scheduleY = bodyY + 88;
-  const todayWeekday = weekdayOptions[(now.day() + 6) % 7];
-  const dayKey = todayWeekday?.key;
-  const todaySlots = dayKey ? state.timetable[dayKey] ?? [] : [];
-
-  ctx.textAlign = "left";
-  for (const slot of todaySlots.slice(0, 7)) {
-    ctx.fillStyle = state.theme.panelAlt;
-    roundRect(ctx, margin + 18, scheduleY, colWidth - 36, 82, 12, true, false);
-
-    ctx.fillStyle = state.theme.accent;
-    ctx.font = `700 ${Math.round(width * 0.016)}px ${FONT_HEADING}`;
-    ctx.fillText(truncateText(ctx, `${slot.periodLabel} ${slot.subject}`.trim(), colWidth - 72), margin + 34, scheduleY + 34);
-
-    ctx.fillStyle = state.theme.primaryText;
-    ctx.font = `${Math.round(width * 0.013)}px ${FONT_BODY}`;
-    ctx.fillText(`${slot.start} ~ ${slot.end}`, margin + 34, scheduleY + 61);
-    scheduleY += 92;
-  }
-
-  const mealX = margin + colWidth + panelGap + 18;
-  let mealY = bodyY + 95;
-
-  ctx.fillStyle = state.theme.primaryText;
-  ctx.font = `${Math.round(width * 0.014)}px ${FONT_BODY}`;
-  ctx.fillText(now.format("M/D(ddd)"), mealX, bodyY + 66);
-
-  ctx.font = `${Math.round(width * 0.014)}px ${FONT_BODY}`;
-  const mealItems = mealsToday ? safeList(mealsToday.items) : ["등록된 급식 정보 없음"];
-  mealItems.forEach((item) => {
-    const markerY = mealY - 8;
-    ctx.fillStyle = `${state.theme.accent}55`;
-    roundRect(ctx, mealX, markerY - 14, colWidth - 42, 32, 8, true, false);
-    ctx.fillStyle = state.theme.primaryText;
-    ctx.fillText(truncateText(ctx, item, colWidth - 58), mealX + 10, markerY + 7);
-    mealY += 39;
-  });
-
-  const eventX = margin + (colWidth + panelGap) * 2 + 18;
-  let eventY = bodyY + 90;
-
-  ctx.fillStyle = state.theme.primaryText;
-  ctx.font = `${Math.round(width * 0.014)}px ${FONT_BODY}`;
-  ctx.fillText(now.format("M월 일정"), eventX, bodyY + 66);
-
-  if (monthlyEvents.length === 0) {
-    ctx.fillText("등록된 일정 없음", eventX, eventY);
-  } else {
-    monthlyEvents.forEach((event) => {
-      ctx.fillStyle = `${event.color}24`;
-      roundRect(ctx, eventX, eventY - 22, colWidth - 36, 70, 10, true, false);
-
-      ctx.fillStyle = darkenHex(event.color, 0.06);
-      ctx.font = `700 ${Math.round(width * 0.013)}px ${FONT_HEADING}`;
-      ctx.fillText(
-        truncateText(ctx, `${dayjs(event.date).format("M/D")} ${event.title}`, colWidth - 62),
-        eventX + 10,
-        eventY
-      );
-
-      ctx.fillStyle = state.theme.primaryText;
-      ctx.font = `${Math.round(width * 0.011)}px ${FONT_BODY}`;
-      ctx.fillText(truncateText(ctx, event.details || "상세 내용 없음", colWidth - 62), eventX + 10, eventY + 22);
-      eventY += 80;
-    });
-  }
+  drawTimetableSection(ctx, timetableBody, state, now);
+  drawMealsSection(ctx, mealsBody, state, now, mealsTodayItems);
+  drawEventsSection(ctx, eventsBody, state, now, monthlyEvents);
 
   return canvas.toDataURL("image/png");
-}
-
-function drawPanel(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  title: string,
-  theme: AppState["theme"]
-): void {
-  const titleSize = Math.max(21, Math.min(38, Math.round(w * 0.085)));
-
-  ctx.fillStyle = `${theme.panel}f3`;
-  roundRect(ctx, x, y, w, h, 18, true, false);
-
-  ctx.fillStyle = theme.accent;
-  ctx.font = `700 ${titleSize}px ${FONT_HEADING}`;
-  ctx.textAlign = "center";
-  ctx.fillText(title, x + w / 2, y + 46);
-
-  ctx.strokeStyle = `${theme.accent}52`;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x + 16, y + 62);
-  ctx.lineTo(x + w - 16, y + 62);
-  ctx.stroke();
 }
 
 function lightenHex(hex: string, amount: number): string {
@@ -214,7 +589,7 @@ function adjustHex(hex: string, delta: number): string {
   }
 
   const channels = [0, 2, 4].map((idx) => {
-    const base = parseInt(normalized.slice(idx, idx + 2), 16);
+    const base = Number.parseInt(normalized.slice(idx, idx + 2), 16);
     const next = Math.max(0, Math.min(255, Math.round(base + 255 * delta)));
     return next.toString(16).padStart(2, "0");
   });

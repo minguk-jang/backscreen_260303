@@ -74,7 +74,10 @@ export function QuickMonthlyEditor({
         급식 빠른 추가
       </button>
 
-      <p>{`이번 달 일정 ${events.length}건 / 급식 ${meals.length}건`}</p>
+      <div className="quick-summary-strip">
+        <span>{`이번 달 일정 ${events.length}건`}</span>
+        <span>{`이번 달 급식 ${meals.length}건`}</span>
+      </div>
 
       <div className="field-grid two-col">
         <div>

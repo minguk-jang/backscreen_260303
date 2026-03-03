@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "icons:sync": "tauri icon src/icons/icon256.png",
     "release:bundle": "bash ./scripts/make-release-bundle.sh",
     "test": "vitest run",
     "test:watch": "vitest"

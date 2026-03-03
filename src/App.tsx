@@ -10,9 +10,11 @@ import { StatusBar } from "./components/StatusBar";
 import { ThemePanel } from "./components/ThemePanel";
 import { TimetablePanel } from "./components/TimetablePanel";
 import { UninstallPanel } from "./components/UninstallPanel";
+import { WallpaperPreviewPanel } from "./components/WallpaperPreviewPanel";
 import { defaultState } from "./defaults";
 import { getCurrentClass } from "./currentClass";
 import { renderWallpaperImage } from "./renderWallpaper";
+import appIcon from "./icons/icon256.png";
 import type { AppState, EventEntry, MealEntry, TimetableSlot, Weekday } from "./types";
 import { buildSetupChecklist } from "./utils/checklist";
 import { filterEventsByMonth, filterMealsByMonth, upsertMealByDate } from "./utils/monthlyData";
@@ -39,9 +41,17 @@ export default function App() {
   const stateRef = useRef(state);
 
   const currentClass = useMemo(() => getCurrentClass(state, now), [state, now]);
+  const previewClockKey = useMemo(() => now.format("YYYY-MM-DD HH:mm"), [now]);
   const monthKey = useMemo(() => now.format("YYYY-MM"), [now]);
   const monthlyMeals = useMemo(() => filterMealsByMonth(state.meals, monthKey), [state.meals, monthKey]);
   const monthlyEvents = useMemo(() => filterEventsByMonth(state.events, monthKey), [state.events, monthKey]);
+  const previewDataUrl = useMemo(() => {
+    try {
+      return renderWallpaperImage(state, 1366, 768);
+    } catch {
+      return "";
+    }
+  }, [state, previewClockKey]);
   const setupChecklist = useMemo(
     () => buildSetupChecklist(state, now.format("YYYY-MM-DD"), hasAppliedOnce),
     [state, now, hasAppliedOnce]
@@ -398,9 +408,12 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="header-card">
-        <div>
-          <h1>BackScreen</h1>
-          <p>윈도우 바탕화면 정보판 편집기</p>
+        <div className="brand-block">
+          <div className="brand-row">
+            <img src={appIcon} alt="" aria-hidden="true" className="brand-icon" />
+            <h1>BackScreen</h1>
+          </div>
+          <p>초등교실용 바탕화면 정보판 스튜디오</p>
         </div>
         <div className="header-time">
           <strong>{now.format("M월 D일 (ddd) HH:mm:ss")}</strong>
@@ -408,13 +421,7 @@ export default function App() {
         </div>
       </header>
 
-      <SetupChecklist
-        items={setupChecklist.items}
-        completed={setupChecklist.completed}
-        total={setupChecklist.total}
-      />
-
-      <section className="actions-row">
+      <section className="actions-row action-toolbar">
         <button className="btn-soft" disabled={saving} onClick={() => void saveState()}>
           저장
         </button>
@@ -488,6 +495,19 @@ export default function App() {
         </section>
 
         <section className="right-rail">
+          <WallpaperPreviewPanel
+            imageDataUrl={previewDataUrl}
+            currentClassLabel={currentClass ? `${currentClass.subject} 수업 중` : "수업 시간이 아닙니다"}
+            monthMealsCount={monthlyMeals.length}
+            monthEventsCount={monthlyEvents.length}
+          />
+
+          <SetupChecklist
+            items={setupChecklist.items}
+            completed={setupChecklist.completed}
+            total={setupChecklist.total}
+          />
+
           <SchoolInfoPanel schoolInfo={state.schoolInfo} onChangeField={setSchoolField} />
 
           <TimetablePanel
