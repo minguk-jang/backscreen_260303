@@ -7,6 +7,15 @@ const canvasContextStub = {
   textAlign: "left",
   strokeStyle: "",
   lineWidth: 1,
+  createLinearGradient: vi.fn(() => ({
+    addColorStop: vi.fn()
+  })),
+  createRadialGradient: vi.fn(() => ({
+    addColorStop: vi.fn()
+  })),
+  measureText: vi.fn((text: string) => ({
+    width: text.length * 10
+  })),
   fillRect: vi.fn(),
   fillText: vi.fn(),
   beginPath: vi.fn(),

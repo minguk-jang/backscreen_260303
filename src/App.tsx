@@ -415,17 +415,19 @@ export default function App() {
       />
 
       <section className="actions-row">
-        <button disabled={saving} onClick={() => void saveState()}>
+        <button className="btn-soft" disabled={saving} onClick={() => void saveState()}>
           저장
         </button>
-        <button disabled={saving} onClick={() => void onSaveAndApply()}>
+        <button className="btn-primary" disabled={saving} onClick={() => void onSaveAndApply()}>
           저장 + 배경 적용
         </button>
-        <button disabled={saving} onClick={() => void onApplyOnly()}>
+        <button className="btn-soft" disabled={saving} onClick={() => void onApplyOnly()}>
           지금 배경 적용
         </button>
-        <button onClick={onExportJson}>JSON 내보내기</button>
-        <label className="file-input-label">
+        <button className="btn-plain" onClick={onExportJson}>
+          JSON 내보내기
+        </button>
+        <label className="file-input-label btn-plain">
           JSON 가져오기
           <input type="file" accept="application/json" onChange={(event) => void onImportJson(event)} />
         </label>

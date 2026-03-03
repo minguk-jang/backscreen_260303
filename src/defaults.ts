@@ -45,15 +45,15 @@ export const defaultState: AppState = {
       date: new Date().toISOString().slice(0, 10),
       title: "대체휴무",
       details: "학교 휴업일",
-      color: "#f59e0b"
+      color: "#d67a4f"
     }
   ],
   theme: {
-    background: "#f7bfd5",
-    panel: "#fff3f7",
+    background: "#fff7ef",
+    panel: "#fff1f5",
     panelAlt: "#ffffff",
-    primaryText: "#7f184c",
-    accent: "#cf1f72"
+    primaryText: "#4f3131",
+    accent: "#d15b87"
   },
   autoApplyEveryMinute: true
 };
