@@ -3,12 +3,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
+import { QuickMonthlyEditor } from "./components/QuickMonthlyEditor";
 import { SetupChecklist } from "./components/SetupChecklist";
 import { defaultState, weekdayOptions } from "./defaults";
 import { getCurrentClass } from "./currentClass";
 import { renderWallpaperImage } from "./renderWallpaper";
 import type { AppState, EventEntry, MealEntry, TimetableSlot, Weekday } from "./types";
 import { buildSetupChecklist } from "./utils/checklist";
+import { filterEventsByMonth, filterMealsByMonth, upsertMealByDate } from "./utils/monthlyData";
 import { validateState } from "./utils/validation";
 
 dayjs.locale("ko");
@@ -41,6 +43,9 @@ export default function App() {
   const stateRef = useRef(state);
 
   const currentClass = useMemo(() => getCurrentClass(state, now), [state, now]);
+  const monthKey = useMemo(() => now.format("YYYY-MM"), [now]);
+  const monthlyMeals = useMemo(() => filterMealsByMonth(state.meals, monthKey), [state.meals, monthKey]);
+  const monthlyEvents = useMemo(() => filterEventsByMonth(state.events, monthKey), [state.events, monthKey]);
   const setupChecklist = useMemo(
     () => buildSetupChecklist(state, now.format("YYYY-MM-DD"), hasAppliedOnce),
     [state, now, hasAppliedOnce]
@@ -247,6 +252,51 @@ export default function App() {
     }));
   };
 
+  const onQuickAddEvent = (date: string, title: string): void => {
+    const trimmedTitle = title.trim();
+    if (!date || !trimmedTitle) {
+      setStatus("일정 날짜와 제목을 입력해 주세요.");
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      events: [
+        ...prev.events,
+        {
+          id: crypto.randomUUID(),
+          date,
+          title: trimmedTitle,
+          details: "",
+          color: "#f59e0b"
+        }
+      ]
+    }));
+    setStatus("일정을 추가했습니다. 저장 버튼을 눌러 반영해 주세요.");
+  };
+
+  const onQuickAddMeal = (date: string, itemsText: string): void => {
+    const items = itemsText
+      .split("\n")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+    if (!date || items.length === 0) {
+      setStatus("급식 날짜와 메뉴를 입력해 주세요.");
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      meals: upsertMealByDate(prev.meals, {
+        id: crypto.randomUUID(),
+        date,
+        items
+      })
+    }));
+    setStatus("급식을 추가/수정했습니다. 저장 버튼을 눌러 반영해 주세요.");
+  };
+
   const saveState = async (message = "저장되었습니다."): Promise<void> => {
     const issues = validateState(state);
     if (issues.length > 0) {
@@ -377,6 +427,14 @@ export default function App() {
       <p className="status-line">{status}</p>
 
       <main className="layout-grid">
+        <QuickMonthlyEditor
+          monthKey={monthKey}
+          meals={monthlyMeals}
+          events={monthlyEvents}
+          onQuickAddEvent={onQuickAddEvent}
+          onQuickAddMeal={onQuickAddMeal}
+        />
+
         <section className="panel">
           <h2>학교 정보</h2>
           <div className="field-grid two-col">
