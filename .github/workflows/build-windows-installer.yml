@@ -92,14 +92,15 @@ jobs:
           $hash = (Get-FileHash $targetExePath -Algorithm SHA256).Hash.ToLower()
           "$hash  $targetExeName" | Set-Content -Path "$targetExePath.sha256" -Encoding utf8
 
-          @"
-BackScreen v$version delivery package
-
-Included files:
-- $targetExeName
-- $targetExeName.sha256
-- INSTALL_GUIDE_KO.txt
-"@ | Set-Content -Path (Join-Path $releaseDir "RELEASE_NOTES.txt") -Encoding utf8
+          $notes = @(
+            "BackScreen v$version delivery package",
+            "",
+            "Included files:",
+            "- $targetExeName",
+            "- $targetExeName.sha256",
+            "- INSTALL_GUIDE_KO.txt"
+          )
+          $notes | Set-Content -Path (Join-Path $releaseDir "RELEASE_NOTES.txt") -Encoding utf8
 
           if (Test-Path $zipPath) {
             Remove-Item $zipPath -Force
