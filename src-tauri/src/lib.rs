@@ -9,6 +9,9 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
 
+mod uninstall_state;
+use uninstall_state::SystemState;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ThemeSettings {
@@ -135,6 +138,8 @@ fn get_primary_screen_size(app: AppHandle) -> Result<ScreenSize, String> {
 
 #[tauri::command]
 fn apply_wallpaper_image(app: AppHandle, png_base64: String) -> Result<(), String> {
+    let _ = capture_original_wallpaper_once(&app);
+
     let image_bytes = base64::engine::general_purpose::STANDARD
         .decode(png_base64)
         .map_err(to_err)?;
@@ -150,6 +155,18 @@ fn apply_wallpaper_image(app: AppHandle, png_base64: String) -> Result<(), Strin
         .map_err(to_err)?;
 
     apply_wallpaper_os(&wallpaper_path)
+}
+
+#[tauri::command]
+fn uninstall_app(app: AppHandle, confirm_text: String) -> Result<(), String> {
+    uninstall_state::validate_confirm_text(&confirm_text)?;
+
+    // Wallpaper restore should not block uninstall completion.
+    let _ = restore_original_wallpaper_if_available(&app);
+
+    launch_uninstaller()?;
+    app.exit(0);
+    Ok(())
 }
 
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
@@ -176,6 +193,61 @@ fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(to_err)
         .map(|path| path.join("backscreen"))
+}
+
+fn system_state_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("system_state.json"))
+}
+
+fn load_system_state(app: &AppHandle) -> Result<SystemState, String> {
+    let state_path = system_state_path(app)?;
+    if !state_path.exists() {
+        return Ok(SystemState::default());
+    }
+
+    let payload = fs::read(&state_path).map_err(to_err)?;
+    serde_json::from_slice::<SystemState>(&payload).map_err(to_err)
+}
+
+fn save_system_state(app: &AppHandle, state: &SystemState) -> Result<(), String> {
+    let state_path = system_state_path(app)?;
+    if let Some(parent) = state_path.parent() {
+        fs::create_dir_all(parent).map_err(to_err)?;
+    }
+
+    let payload = serde_json::to_vec_pretty(state).map_err(to_err)?;
+    fs::write(state_path, payload).map_err(to_err)
+}
+
+fn capture_original_wallpaper_once(app: &AppHandle) -> Result<(), String> {
+    let mut state = load_system_state(app)?;
+    if state.original_wallpaper_path.is_some() {
+        return Ok(());
+    }
+
+    if let Some(path) = get_current_wallpaper_path_os()? {
+        if !path.trim().is_empty() {
+            state.original_wallpaper_path = Some(path);
+            state.captured_at = Some(Local::now().to_rfc3339());
+            save_system_state(app, &state)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn restore_original_wallpaper_if_available(app: &AppHandle) -> Result<(), String> {
+    let state = load_system_state(app)?;
+    let Some(path) = state.original_wallpaper_path else {
+        return Ok(());
+    };
+
+    let original = PathBuf::from(path);
+    if !original.exists() {
+        return Ok(());
+    }
+
+    apply_wallpaper_os(&original)
 }
 
 fn create_backup_snapshot(app: &AppHandle, state: &AppState) -> Result<(), String> {
@@ -212,6 +284,37 @@ fn create_backup_snapshot(app: &AppHandle, state: &AppState) -> Result<(), Strin
     Ok(())
 }
 
+#[cfg(any(target_os = "windows", test))]
+fn uninstall_executable_path(current_exe: &Path) -> Result<PathBuf, String> {
+    let install_dir = current_exe
+        .parent()
+        .ok_or_else(|| "앱 설치 경로를 찾을 수 없습니다.".to_string())?;
+    Ok(install_dir.join("uninstall.exe"))
+}
+
+#[cfg(target_os = "windows")]
+fn launch_uninstaller() -> Result<(), String> {
+    let current_exe = std::env::current_exe().map_err(to_err)?;
+    let uninstall_exe = uninstall_executable_path(&current_exe)?;
+
+    if !uninstall_exe.exists() {
+        return Err(
+            "언인스톨러를 찾을 수 없습니다. Windows '설정 > 앱 > 설치된 앱'에서 BackScreen을 제거해 주세요."
+                .to_string(),
+        );
+    }
+
+    std::process::Command::new(&uninstall_exe)
+        .spawn()
+        .map_err(to_err)?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn launch_uninstaller() -> Result<(), String> {
+    Err("Windows 설치 환경에서만 앱 제거를 지원합니다.".to_string())
+}
+
 #[cfg(target_os = "windows")]
 fn apply_wallpaper_os(path: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
@@ -239,6 +342,40 @@ fn apply_wallpaper_os(path: &Path) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn get_current_wallpaper_path_os() -> Result<Option<String>, String> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETDESKWALLPAPER, SystemParametersInfoW};
+
+    let mut buffer = [0u16; 260];
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETDESKWALLPAPER,
+            buffer.len() as u32,
+            buffer.as_mut_ptr() as *mut _,
+            0,
+        )
+    };
+
+    if ok == 0 {
+        return Err(format!(
+            "현재 배경 조회 실패: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+
+    let length = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+    if length == 0 {
+        return Ok(None);
+    }
+
+    Ok(Some(String::from_utf16_lossy(&buffer[..length])))
+}
+
+#[cfg(not(target_os = "windows"))]
+fn get_current_wallpaper_path_os() -> Result<Option<String>, String> {
+    Ok(None)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -330,6 +467,19 @@ fn to_err<E: std::fmt::Display>(error: E) -> String {
     error.to_string()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::uninstall_executable_path;
+    use std::path::PathBuf;
+
+    #[test]
+    fn uninstall_path_is_resolved_in_same_directory() {
+        let current = PathBuf::from("/opt/backscreen/backscreen");
+        let resolved = uninstall_executable_path(&current).expect("path resolve failed");
+        assert_eq!(resolved, PathBuf::from("/opt/backscreen/uninstall.exe"));
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::init(
@@ -364,6 +514,10 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.hide();
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -376,7 +530,8 @@ pub fn run() {
             load_app_state,
             save_app_state,
             get_primary_screen_size,
-            apply_wallpaper_image
+            apply_wallpaper_image,
+            uninstall_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

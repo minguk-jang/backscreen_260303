@@ -31,7 +31,8 @@
       "nsis": {
         "installerIcon": "icons/icon.ico",
         "displayLanguageSelector": true,
-        "startMenuFolder": "BackScreen"
+        "startMenuFolder": "BackScreen",
+        "installerHooks": "nsis-hooks.nsh"
       }
     },
     "icon": [

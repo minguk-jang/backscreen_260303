@@ -66,5 +66,8 @@ npm run tauri build
 - [ ] Artifacts에서 전달용 zip 또는 파일 다운로드
 - [ ] 산출물에 exe + sha256 포함 확인 (Actions artifact 또는 `release/` 폴더)
 - [ ] 설치안내.txt 포함 확인
+- [ ] 앱 내 "앱 제거" 동작 확인 (확인 입력 `삭제`)
+- [ ] 제거 후 `app.db/backups/wallpaper` 데이터 폴더 완전 삭제 확인
+- [ ] 제거 시 기존 바탕화면 원복 확인
 - [ ] 기존 다운로드 링크를 최신 파일로 갱신
 - [ ] 공지 템플릿으로 사용자 안내 발송

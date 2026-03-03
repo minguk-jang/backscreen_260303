@@ -9,6 +9,7 @@ import { SetupChecklist } from "./components/SetupChecklist";
 import { StatusBar } from "./components/StatusBar";
 import { ThemePanel } from "./components/ThemePanel";
 import { TimetablePanel } from "./components/TimetablePanel";
+import { UninstallPanel } from "./components/UninstallPanel";
 import { defaultState } from "./defaults";
 import { getCurrentClass } from "./currentClass";
 import { renderWallpaperImage } from "./renderWallpaper";
@@ -383,6 +384,17 @@ export default function App() {
     }
   };
 
+  const onUninstall = async (confirmText: string): Promise<void> => {
+    setStatus("앱 제거를 시작합니다...");
+    try {
+      await invoke("uninstall_app", { confirmText });
+      setStatus("앱 제거 명령을 실행했습니다. 잠시 후 앱이 종료됩니다.");
+    } catch (error) {
+      setStatus(`앱 제거 실패: ${String(error)}`);
+      throw error;
+    }
+  };
+
   return (
     <div className="app-shell">
       <header className="header-card">
@@ -484,6 +496,7 @@ export default function App() {
           />
 
           <ThemePanel theme={state.theme} onChangeTheme={setThemeField} />
+          <UninstallPanel onUninstall={onUninstall} disabled={saving} />
         </section>
       </main>
     </div>

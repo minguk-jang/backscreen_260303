@@ -305,6 +305,16 @@ textarea {
   background: #9e234f;
 }
 
+.uninstall-panel {
+  border-color: #e58eb6;
+  background: #fff4f8;
+}
+
+.uninstall-warning {
+  margin-bottom: 10px;
+  color: #84224d;
+}
+
 .empty {
   margin: 0;
   padding: 12px;
