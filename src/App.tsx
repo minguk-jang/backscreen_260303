@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
+import { DisplaySettingsPanel, type MonitorOption } from "./components/DisplaySettingsPanel";
 import { SchoolInfoPanel } from "./components/SchoolInfoPanel";
 import { SetupChecklist } from "./components/SetupChecklist";
 import { StatusBar } from "./components/StatusBar";
@@ -34,6 +35,9 @@ function deepCloneState(state: AppState): AppState {
 
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState);
+  const [monitors, setMonitors] = useState<MonitorOption[]>([
+    { id: "primary", name: "주 모니터", isPrimary: true }
+  ]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("초기화 중...");
@@ -73,7 +77,7 @@ export default function App() {
         }
 
         if (loaded && loaded.timetable) {
-          setState(loaded);
+          setState(mergeWithDefaults(loaded));
           setStatus("저장된 데이터를 불러왔습니다.");
         } else {
           setStatus("기본 템플릿으로 시작합니다.");
@@ -88,6 +92,47 @@ export default function App() {
     };
 
     bootstrap();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    invoke<unknown>("list_display_monitors")
+      .then((raw) => {
+        if (!active || !Array.isArray(raw) || raw.length === 0) {
+          return;
+        }
+
+        const next = raw
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return null;
+            }
+
+            const monitor = entry as { id?: unknown; name?: unknown; isPrimary?: unknown };
+            if (typeof monitor.id !== "string" || typeof monitor.name !== "string") {
+              return null;
+            }
+
+            return {
+              id: monitor.id,
+              name: monitor.name,
+              isPrimary: Boolean(monitor.isPrimary)
+            } satisfies MonitorOption;
+          })
+          .filter((monitor): monitor is MonitorOption => monitor !== null);
+
+        if (next.length > 0) {
+          setMonitors(next);
+        }
+      })
+      .catch(() => {
+        // Keep fallback list when backend command is unavailable (web preview, test).
+      });
 
     return () => {
       active = false;
@@ -206,6 +251,19 @@ export default function App() {
       ...prev,
       theme: {
         ...prev.theme,
+        [field]: value
+      }
+    }));
+  };
+
+  const setDisplayField = <K extends keyof AppState["display"]>(
+    field: K,
+    value: AppState["display"][K]
+  ): void => {
+    setState((prev) => ({
+      ...prev,
+      display: {
+        ...prev.display,
         [field]: value
       }
     }));
@@ -499,6 +557,14 @@ export default function App() {
             onAddSlot={addSlot}
             onUpdateSlot={updateSlot}
             onDeleteSlot={deleteSlot}
+          />
+
+          <DisplaySettingsPanel
+            settings={state.display}
+            monitors={monitors}
+            onChangeMonitorMode={(mode) => setDisplayField("monitorMode", mode)}
+            onChangeMonitorId={(monitorId) => setDisplayField("monitorId", monitorId || undefined)}
+            onChangeScale={(scalePercent) => setDisplayField("contentScalePercent", scalePercent)}
           />
 
           <ThemePanel theme={state.theme} onChangeTheme={setThemeField} />

@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import App from "../App";
 
@@ -14,5 +14,7 @@ describe("responsive layout classes", () => {
   it("applies dashboard root class", () => {
     const { container } = render(<App />);
     expect(container.querySelector(".dashboard-grid")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "디스플레이 설정" })).toBeInTheDocument();
+    expect(screen.getByLabelText("콘텐츠 크기")).toBeInTheDocument();
   });
 });
