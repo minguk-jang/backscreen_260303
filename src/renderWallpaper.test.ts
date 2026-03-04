@@ -51,4 +51,27 @@ describe("renderWallpaperImage", () => {
     const data = renderWallpaperImage(state, 1366, 768);
     expect(data.startsWith("data:image/png;base64,")).toBe(true);
   });
+
+  it("renders with content scale variations without crash", () => {
+    const large = renderWallpaperImage(
+      {
+        ...defaultState,
+        display: { ...defaultState.display, contentScalePercent: 130 }
+      },
+      1366,
+      768
+    );
+
+    const small = renderWallpaperImage(
+      {
+        ...defaultState,
+        display: { ...defaultState.display, contentScalePercent: 80 }
+      },
+      1366,
+      768
+    );
+
+    expect(large.startsWith("data:image/png;base64,")).toBe(true);
+    expect(small.startsWith("data:image/png;base64,")).toBe(true);
+  });
 });

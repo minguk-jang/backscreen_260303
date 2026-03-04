@@ -558,7 +558,8 @@ export function renderWallpaperImage(state: AppState, width: number, height: num
 
   fillBackdrop(ctx, width, height, state.theme.background);
 
-  const layout = computeLayout(width, height);
+  const contentScale = Math.max(0.8, Math.min(1.3, state.display.contentScalePercent / 100));
+  const layout = computeLayout(width, height, contentScale);
   const currentLabel = current ? `${current.subject} 수업 중입니다.` : "현재 수업 시간이 아닙니다.";
 
   drawHeaderSection(ctx, layout.header, state, now, currentLabel);
