@@ -1,9 +1,10 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import { DisplaySettingsPanel, type MonitorOption } from "./components/DisplaySettingsPanel";
+import { MealImportPanel } from "./components/MealImportPanel";
 import { SchoolInfoPanel } from "./components/SchoolInfoPanel";
 import { SetupChecklist } from "./components/SetupChecklist";
 import { StatusBar } from "./components/StatusBar";
@@ -18,7 +19,7 @@ import { renderWallpaperImage } from "./renderWallpaper";
 import appIcon from "./icons/icon256.png";
 import type { AppState, EventEntry, MealEntry, TimetableSlot, Weekday } from "./types";
 import { buildSetupChecklist } from "./utils/checklist";
-import { filterEventsByMonth, filterMealsByMonth } from "./utils/monthlyData";
+import { filterEventsByMonth, filterMealsByMonth, upsertMealByDate } from "./utils/monthlyData";
 import { sortTodos } from "./utils/todos";
 import { validateState } from "./utils/validation";
 
@@ -29,8 +30,35 @@ interface ScreenSize {
   height: number;
 }
 
+interface WidgetStateSyncPayload {
+  source: "studio" | "widget";
+  state: AppState;
+}
+
+const LOCAL_STATE_SYNC_KEY = "backscreen:state-sync";
+
 function deepCloneState(state: AppState): AppState {
   return JSON.parse(JSON.stringify(state)) as AppState;
+}
+
+function persistLocalState(state: AppState): void {
+  try {
+    window.localStorage.setItem(LOCAL_STATE_SYNC_KEY, JSON.stringify(state));
+  } catch {
+    // noop
+  }
+}
+
+function restoreLocalState(): AppState | null {
+  try {
+    const raw = window.localStorage.getItem(LOCAL_STATE_SYNC_KEY);
+    if (!raw) {
+      return null;
+    }
+    return JSON.parse(raw) as AppState;
+  } catch {
+    return null;
+  }
 }
 
 export default function App() {
@@ -83,7 +111,13 @@ export default function App() {
           setStatus("기본 템플릿으로 시작합니다.");
         }
       } catch (error) {
-        setStatus(`불러오기 실패: ${String(error)}`);
+        const localFallback = restoreLocalState();
+        if (localFallback) {
+          setState(mergeWithDefaults(localFallback));
+          setStatus("로컬 미리보기 상태를 불러왔습니다.");
+        } else {
+          setStatus(`불러오기 실패: ${String(error)}`);
+        }
       } finally {
         if (active) {
           setIsLoaded(true);
@@ -136,6 +170,74 @@ export default function App() {
 
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+
+    persistLocalState(state);
+
+    emit("widget://state-updated", {
+      source: "studio",
+      state
+    } satisfies WidgetStateSyncPayload).catch(() => {
+      // Ignore in pure web preview mode.
+    });
+  }, [isLoaded, state]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== LOCAL_STATE_SYNC_KEY || !event.newValue) {
+        return;
+      }
+
+      try {
+        const incoming = JSON.parse(event.newValue) as AppState;
+        setState((prev) => {
+          const prevSerialized = JSON.stringify(prev);
+          const next = mergeWithDefaults(incoming);
+          const nextSerialized = JSON.stringify(next);
+          return prevSerialized === nextSerialized ? prev : next;
+        });
+      } catch {
+        // noop
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    let dispose: (() => void) | null = null;
+
+    listen<WidgetStateSyncPayload>("widget://state-updated", (event) => {
+      if (!mounted || event.payload?.source !== "widget") {
+        return;
+      }
+
+      const next = mergeWithDefaults(event.payload.state);
+      setState(next);
+      setStatus("위젯 변경사항이 반영되었습니다.");
+    })
+      .then((unlisten) => {
+        dispose = unlisten;
+      })
+      .catch(() => {
+        // Ignore in pure web preview mode.
+      });
+
+    return () => {
+      mounted = false;
+      if (dispose) {
+        dispose();
+      }
     };
   }, []);
 
@@ -361,6 +463,32 @@ export default function App() {
     setStatus("할 일을 삭제했습니다.");
   };
 
+  const onApplyImportedMeals = (
+    imported: MealEntry[],
+    meta: { fileName: string; sourceType: "hwp" | "hwpx" | "pdf" }
+  ): void => {
+    setState((prev) => {
+      let nextMeals = prev.meals;
+      for (const meal of imported) {
+        nextMeals = upsertMealByDate(nextMeals, {
+          ...meal,
+          id: crypto.randomUUID()
+        });
+      }
+
+      return {
+        ...prev,
+        meals: nextMeals,
+        mealImport: {
+          lastImportedAt: new Date().toISOString(),
+          lastSourceType: meta.sourceType,
+          lastFileName: meta.fileName
+        }
+      };
+    });
+    setStatus(`급식 업로드 반영 완료: ${imported.length}건`);
+  };
+
   const saveState = async (message = "저장되었습니다."): Promise<void> => {
     const issues = validateState(state);
     if (issues.length > 0) {
@@ -509,6 +637,8 @@ export default function App() {
 
       <main className="dashboard-grid">
         <section className="left-rail">
+          <MealImportPanel monthKey={monthKey} onApplyMeals={onApplyImportedMeals} />
+
           <section className="panel">
             <div className="panel-title-row">
               <h2>급식 메뉴</h2>

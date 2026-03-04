@@ -7,7 +7,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn().mockResolvedValue(() => undefined)
+  listen: vi.fn().mockResolvedValue(() => undefined),
+  emit: vi.fn().mockResolvedValue(undefined)
 }));
 
 describe("responsive layout classes", () => {

@@ -12,7 +12,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn().mockResolvedValue(() => undefined)
+  listen: vi.fn().mockResolvedValue(() => undefined),
+  emit: vi.fn().mockResolvedValue(undefined)
 }));
 
 afterEach(() => {
@@ -24,6 +25,12 @@ beforeEach(() => {
   invokeMock.mockImplementation((command: string) => {
     if (command === "load_app_state") {
       return Promise.resolve(defaultState);
+    }
+    if (command === "list_display_monitors") {
+      return Promise.resolve([
+        { id: "monitor-1", name: "모니터 1", isPrimary: true },
+        { id: "monitor-2", name: "모니터 2", isPrimary: false }
+      ]);
     }
     if (command === "get_primary_screen_size") {
       return Promise.resolve({ width: 1366, height: 768 });
@@ -63,6 +70,25 @@ describe("App layout", () => {
           pngBase64: expect.any(String),
           monitorMode: "primary",
           monitorId: null
+        })
+      );
+    });
+  });
+
+  it("passes selected single monitor target payload", async () => {
+    render(<App />);
+
+    await screen.findByRole("option", { name: "모니터 2" });
+    fireEvent.change(screen.getByLabelText("대상 모니터"), { target: { value: "single" } });
+    fireEvent.change(screen.getByLabelText("모니터 선택"), { target: { value: "monitor-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "지금 배경 적용" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        "apply_wallpaper_image",
+        expect.objectContaining({
+          monitorMode: "single",
+          monitorId: "monitor-2"
         })
       );
     });

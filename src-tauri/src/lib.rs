@@ -71,11 +71,54 @@ struct EventEntry {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct TodoEntry {
+    id: String,
+    text: String,
+    done: bool,
+    order: i64,
+    created_at: String,
+    done_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DisplaySettings {
+    monitor_mode: String,
+    monitor_id: Option<String>,
+    content_scale_percent: u16,
+}
+
+impl Default for DisplaySettings {
+    fn default() -> Self {
+        Self {
+            monitor_mode: "primary".to_string(),
+            monitor_id: None,
+            content_scale_percent: 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct MealImportSettings {
+    last_imported_at: Option<String>,
+    last_source_type: Option<String>,
+    last_file_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AppState {
     school_info: SchoolInfo,
     timetable: Timetable,
     meals: Vec<MealEntry>,
     events: Vec<EventEntry>,
+    #[serde(default)]
+    todos: Vec<TodoEntry>,
+    #[serde(default)]
+    display: DisplaySettings,
+    #[serde(default)]
+    meal_import: MealImportSettings,
     theme: ThemeSettings,
     auto_apply_every_minute: bool,
 }
@@ -201,7 +244,9 @@ fn apply_wallpaper_image(
         .save_with_format(&wallpaper_path, image::ImageFormat::Bmp)
         .map_err(to_err)?;
 
-    apply_wallpaper_os(&wallpaper_path, monitor_mode.as_deref(), monitor_id.as_deref())
+    let mode = monitor_mode.as_deref().unwrap_or("primary");
+    let target_monitor_index = resolve_target_monitor_index(&app, mode, monitor_id.as_deref())?;
+    apply_wallpaper_os(&wallpaper_path, mode, target_monitor_index)
 }
 
 #[tauri::command]
@@ -220,6 +265,38 @@ fn parse_monitor_id(id: &str) -> Option<usize> {
     id.strip_prefix("monitor-")
         .and_then(|value| value.parse::<usize>().ok())
         .and_then(|value| value.checked_sub(1))
+}
+
+fn resolve_target_monitor_index(
+    app: &AppHandle,
+    mode: &str,
+    monitor_id: Option<&str>,
+) -> Result<Option<usize>, String> {
+    if mode == "all" {
+        return Ok(None);
+    }
+
+    let monitors = list_monitors(app)?;
+    if monitors.is_empty() {
+        return Ok(None);
+    }
+
+    let monitor_refs: Vec<MonitorRef> = monitors
+        .iter()
+        .map(|monitor| MonitorRef {
+            id: monitor.id.clone(),
+            is_primary: monitor.is_primary,
+        })
+        .collect();
+
+    let resolved_id = resolve_target_monitor_id(mode, monitor_id, &monitor_refs);
+    let resolved_index = resolved_id
+        .as_deref()
+        .and_then(parse_monitor_id)
+        .filter(|idx| *idx < monitors.len())
+        .unwrap_or(0);
+
+    Ok(Some(resolved_index))
 }
 
 fn list_monitors(app: &AppHandle) -> Result<Vec<DisplayMonitor>, String> {
@@ -341,7 +418,7 @@ fn restore_original_wallpaper_if_available(app: &AppHandle) -> Result<(), String
         return Ok(());
     }
 
-    apply_wallpaper_os(&original, None, None)
+    apply_wallpaper_os(&original, "all", None)
 }
 
 fn create_backup_snapshot(app: &AppHandle, state: &AppState) -> Result<(), String> {
@@ -412,13 +489,19 @@ fn launch_uninstaller() -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn apply_wallpaper_os(
     path: &Path,
-    _monitor_mode: Option<&str>,
-    _monitor_id: Option<&str>,
+    mode: &str,
+    target_monitor_index: Option<usize>,
 ) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         SystemParametersInfoW, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE,
     };
+
+    if mode != "all" {
+        if let Some(monitor_index) = target_monitor_index {
+            return apply_wallpaper_to_single_monitor(path, monitor_index);
+        }
+    }
 
     let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
     wide.push(0);
@@ -440,6 +523,42 @@ fn apply_wallpaper_os(
     }
 
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn apply_wallpaper_to_single_monitor(path: &Path, monitor_index: usize) -> Result<(), String> {
+    let escaped_path = path
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('\'', "''");
+    let script = build_single_monitor_wallpaper_script(monitor_index, &escaped_path);
+
+    let status = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ])
+        .status()
+        .map_err(to_err)?;
+
+    if !status.success() {
+        return Err("선택한 모니터에 바탕화면을 적용하지 못했습니다.".to_string());
+    }
+
+    Ok(())
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn build_single_monitor_wallpaper_script(monitor_index: usize, escaped_path: &str) -> String {
+    format!(
+        "$wp = New-Object -ComObject Microsoft.Windows.DesktopWallpaper; \
+         $id = $wp.GetMonitorDevicePathAt({monitor_index}); \
+         $wp.SetWallpaper($id, '{escaped_path}')"
+    )
 }
 
 #[cfg(target_os = "windows")]
@@ -479,8 +598,8 @@ fn get_current_wallpaper_path_os() -> Result<Option<String>, String> {
 #[cfg(not(target_os = "windows"))]
 fn apply_wallpaper_os(
     _path: &Path,
-    _monitor_mode: Option<&str>,
-    _monitor_id: Option<&str>,
+    _mode: &str,
+    _target_monitor_index: Option<usize>,
 ) -> Result<(), String> {
     Err("현재 OS에서는 실제 바탕화면 적용을 지원하지 않습니다. Windows에서 실행하세요.".to_string())
 }
@@ -550,6 +669,9 @@ fn default_state() -> AppState {
             details: "체육관 모임".to_string(),
             color: "#d67a4f".to_string(),
         }],
+        todos: vec![],
+        display: DisplaySettings::default(),
+        meal_import: MealImportSettings::default(),
         theme: ThemeSettings {
             background: "#fff7ef".to_string(),
             panel: "#fff1f5".to_string(),
@@ -569,9 +691,13 @@ fn to_err<E: std::fmt::Display>(error: E) -> String {
     error.to_string()
 }
 
+fn widget_route_url() -> &'static str {
+    "/?mode=widget"
+}
+
 #[cfg(test)]
 mod tests {
-    use super::uninstall_executable_path;
+    use super::{build_single_monitor_wallpaper_script, uninstall_executable_path, widget_route_url};
     use std::path::PathBuf;
 
     #[test]
@@ -579,6 +705,18 @@ mod tests {
         let current = PathBuf::from("/opt/backscreen/backscreen");
         let resolved = uninstall_executable_path(&current).expect("path resolve failed");
         assert_eq!(resolved, PathBuf::from("/opt/backscreen/uninstall.exe"));
+    }
+
+    #[test]
+    fn widget_url_contains_mode_widget() {
+        assert_eq!(widget_route_url(), "/?mode=widget");
+    }
+
+    #[test]
+    fn powershell_script_targets_selected_monitor_index() {
+        let script = build_single_monitor_wallpaper_script(2, "C:\\\\wallpaper.bmp");
+        assert!(script.contains("GetMonitorDevicePathAt(2)"));
+        assert!(script.contains("C:\\\\wallpaper.bmp"));
     }
 }
 
@@ -618,6 +756,21 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
+            }
+
+            if app.get_webview_window("todo-widget").is_none() {
+                let _ = tauri::WebviewWindowBuilder::new(
+                    app,
+                    "todo-widget",
+                    tauri::WebviewUrl::App(widget_route_url().into()),
+                )
+                .title("BackScreen Todo")
+                .inner_size(360.0, 680.0)
+                .decorations(false)
+                .always_on_top(true)
+                .resizable(false)
+                .skip_taskbar(true)
+                .build();
             }
 
             Ok(())

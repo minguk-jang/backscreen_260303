@@ -292,14 +292,15 @@ function drawMealsSection(
 
   drawFittedText(ctx, {
     text: now.format("M/D(ddd)"),
-    x: body.x,
+    x: body.x + body.w / 2,
     y: body.y + 18,
     maxWidth: body.w,
     maxFont: 22,
     minFont: 12,
     family: FONT_BODY,
     weight: 700,
-    color: state.theme.primaryText
+    color: state.theme.primaryText,
+    align: "center"
   });
 
   const chipYStart = body.y + 36;
@@ -312,19 +313,23 @@ function drawMealsSection(
 
   let y = chipYStart;
   for (const item of limited.visible) {
+    const chipTop = y - 18;
+    const chipTextY = chipTop + chipH * 0.68;
+
     ctx.fillStyle = `${state.theme.accent}4f`;
-    roundRect(ctx, body.x, y - 18, body.w, chipH, 8, true, false);
+    roundRect(ctx, body.x, chipTop, body.w, chipH, 8, true, false);
 
     drawFittedText(ctx, {
       text: item,
-      x: body.x + 8,
-      y,
+      x: body.x + body.w / 2,
+      y: chipTextY,
       maxWidth: body.w - 16,
       maxFont: 20,
       minFont: 11,
       family: FONT_BODY,
       weight: 500,
-      color: state.theme.primaryText
+      color: state.theme.primaryText,
+      align: "center"
     });
 
     y += chipH + chipGap;
@@ -333,14 +338,15 @@ function drawMealsSection(
   if (limited.hidden > 0) {
     drawFittedText(ctx, {
       text: `+${limited.hidden}개 더 있음`,
-      x: body.x,
+      x: body.x + body.w / 2,
       y: Math.min(body.y + body.h - 4, y + 8),
       maxWidth: body.w,
       maxFont: 16,
       minFont: 11,
       family: FONT_BODY,
       weight: 500,
-      color: darkenHex(state.theme.primaryText, 0.08)
+      color: darkenHex(state.theme.primaryText, 0.08),
+      align: "center"
     });
   }
 }
