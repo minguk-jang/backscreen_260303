@@ -17,4 +17,12 @@ describe("computeLayout", () => {
     expect(layout.content.x + layout.content.w).toBeLessThanOrEqual(1366);
     expect(layout.content.y + layout.content.h).toBeLessThanOrEqual(768);
   });
+
+  it("applies offset movement and still clamps inside viewport", () => {
+    const layout = computeLayout(1366, 768, 0.5, 100, -100);
+    expect(layout.content.x).toBeGreaterThanOrEqual(0);
+    expect(layout.content.y).toBeGreaterThanOrEqual(0);
+    expect(layout.content.x + layout.content.w).toBeLessThanOrEqual(1366);
+    expect(layout.content.y + layout.content.h).toBeLessThanOrEqual(768);
+  });
 });

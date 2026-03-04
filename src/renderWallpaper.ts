@@ -18,8 +18,22 @@ interface CalendarCell {
   hasEvent: boolean;
 }
 
-export function getWallpaperLayout(width: number, height: number): WallpaperLayout {
-  return computeLayout(width, height);
+interface LayoutDisplayInput {
+  contentScalePercent: number;
+  offsetXPercent: number;
+  offsetYPercent: number;
+}
+
+export function getWallpaperLayout(
+  width: number,
+  height: number,
+  display?: Partial<LayoutDisplayInput>
+): WallpaperLayout {
+  const contentScale = Math.max(0.5, Math.min(1.3, (display?.contentScalePercent ?? 100) / 100));
+  const offsetXPercent = Number.isFinite(display?.offsetXPercent) ? (display?.offsetXPercent as number) : 0;
+  const offsetYPercent = Number.isFinite(display?.offsetYPercent) ? (display?.offsetYPercent as number) : 0;
+
+  return computeLayout(width, height, contentScale, offsetXPercent, offsetYPercent);
 }
 
 function safeList(items: string[]): string[] {
@@ -686,8 +700,7 @@ export function renderWallpaperImage(state: AppState, width: number, height: num
 
   fillBackdrop(ctx, width, height, state.theme.background);
 
-  const contentScale = Math.max(0.8, Math.min(1.3, state.display.contentScalePercent / 100));
-  const layout = computeLayout(width, height, contentScale);
+  const layout = getWallpaperLayout(width, height, state.display);
   const currentLabel = current ? `${current.subject} 수업 중입니다.` : "현재 수업 시간이 아닙니다.";
 
   drawHeaderSection(ctx, layout.header, state, now, currentLabel);

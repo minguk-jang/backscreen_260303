@@ -86,6 +86,10 @@ struct DisplaySettings {
     monitor_mode: String,
     monitor_id: Option<String>,
     content_scale_percent: u16,
+    #[serde(default)]
+    offset_x_percent: i16,
+    #[serde(default)]
+    offset_y_percent: i16,
 }
 
 impl Default for DisplaySettings {
@@ -94,6 +98,8 @@ impl Default for DisplaySettings {
             monitor_mode: "primary".to_string(),
             monitor_id: None,
             content_scale_percent: 100,
+            offset_x_percent: 0,
+            offset_y_percent: 0,
         }
     }
 }
@@ -728,14 +734,27 @@ pub fn run() {
         ))
         .setup(|app| {
             let auto = app.autolaunch();
-            let _ = auto.enable();
+            match auto.is_enabled() {
+                Ok(false) => {
+                    if let Err(err) = auto.enable() {
+                        eprintln!("autostart enable failed: {err}");
+                    }
+                }
+                Ok(true) => {}
+                Err(err) => {
+                    eprintln!("autostart state check failed: {err}");
+                    if let Err(enable_err) = auto.enable() {
+                        eprintln!("autostart enable retry failed: {enable_err}");
+                    }
+                }
+            }
 
             let open = MenuItem::with_id(app, "open", "열기", true, None::<&str>)?;
             let apply = MenuItem::with_id(app, "apply", "지금 배경 적용", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &apply, &quit])?;
 
-            let _tray = TrayIconBuilder::new()
+            let tray_build = TrayIconBuilder::new()
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => {
@@ -752,7 +771,16 @@ pub fn run() {
                     }
                     _ => {}
                 })
-                .build(app)?;
+                .build(app);
+
+            if let Err(err) = tray_build {
+                eprintln!("tray initialization failed: {err}");
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                return Ok(());
+            }
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();

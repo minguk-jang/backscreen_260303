@@ -27,13 +27,24 @@ export function validateState(state: AppState): ValidationIssue[] {
 
   if (
     !Number.isFinite(state.display.contentScalePercent) ||
-    state.display.contentScalePercent < 80 ||
+    state.display.contentScalePercent < 50 ||
     state.display.contentScalePercent > 130
   ) {
     issues.push({
       path: "display.contentScalePercent",
-      message: "콘텐츠 크기(%)는 80~130 범위여야 합니다.",
-      fix: "디스플레이 설정에서 콘텐츠 크기를 80~130 사이로 조정해 주세요."
+      message: "콘텐츠 크기(%)는 50~130 범위여야 합니다.",
+      fix: "디스플레이 설정에서 콘텐츠 크기를 50~130 사이로 조정해 주세요."
+    });
+  }
+
+  if (
+    !Number.isFinite(state.display.offsetXPercent) ||
+    !Number.isFinite(state.display.offsetYPercent)
+  ) {
+    issues.push({
+      path: "display.offset",
+      message: "콘텐츠 위치 값이 올바르지 않습니다.",
+      fix: "위치 초기화를 눌러 가운데 정렬로 복원해 주세요."
     });
   }
 

@@ -12,6 +12,7 @@ interface DisplaySettingsPanelProps {
   onChangeMonitorMode: (mode: MonitorTargetMode) => void;
   onChangeMonitorId: (monitorId: string) => void;
   onChangeScale: (scalePercent: number) => void;
+  onResetPosition: () => void;
 }
 
 export function DisplaySettingsPanel({
@@ -19,7 +20,8 @@ export function DisplaySettingsPanel({
   monitors,
   onChangeMonitorMode,
   onChangeMonitorId,
-  onChangeScale
+  onChangeScale,
+  onResetPosition
 }: DisplaySettingsPanelProps) {
   return (
     <section className="panel">
@@ -61,7 +63,7 @@ export function DisplaySettingsPanel({
           콘텐츠 크기
           <input
             type="range"
-            min={80}
+            min={50}
             max={130}
             step={1}
             value={settings.contentScalePercent}
@@ -69,6 +71,12 @@ export function DisplaySettingsPanel({
           />
         </label>
         <p className="helper-text">{`현재 ${settings.contentScalePercent}%`}</p>
+        <p className="helper-text">{`위치 X ${Math.round(settings.offsetXPercent)}% · Y ${Math.round(
+          settings.offsetYPercent
+        )}%`}</p>
+        <button type="button" className="btn-soft" onClick={onResetPosition}>
+          위치 초기화
+        </button>
       </div>
     </section>
   );

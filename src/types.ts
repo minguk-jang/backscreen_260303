@@ -52,6 +52,8 @@ export interface DisplaySettings {
   monitorMode: MonitorTargetMode;
   monitorId?: string;
   contentScalePercent: number;
+  offsetXPercent: number;
+  offsetYPercent: number;
 }
 
 export interface MealImportSettings {

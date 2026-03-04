@@ -20,7 +20,9 @@ describe("validateState", () => {
       // TODO/display fields are added incrementally; test should fail before implementation.
       display: {
         monitorMode: "primary",
-        contentScalePercent: 150
+        contentScalePercent: 150,
+        offsetXPercent: 0,
+        offsetYPercent: 0
       },
       todos: [
         {
@@ -32,7 +34,12 @@ describe("validateState", () => {
         }
       ]
     } as typeof defaultState & {
-      display: { monitorMode: string; contentScalePercent: number };
+      display: {
+        monitorMode: string;
+        contentScalePercent: number;
+        offsetXPercent: number;
+        offsetYPercent: number;
+      };
       todos: Array<{
         id: string;
         text: string;
@@ -45,5 +52,19 @@ describe("validateState", () => {
     const issues = validateState(state);
     expect(issues.some((issue) => issue.path.includes("display.contentScalePercent"))).toBe(true);
     expect(issues.some((issue) => issue.path.includes("todos"))).toBe(true);
+  });
+
+  it("accepts 50 percent scale and rejects below 50", () => {
+    const okIssues = validateState({
+      ...defaultState,
+      display: { ...defaultState.display, contentScalePercent: 50 }
+    });
+    const badIssues = validateState({
+      ...defaultState,
+      display: { ...defaultState.display, contentScalePercent: 49 }
+    });
+
+    expect(okIssues.some((issue) => issue.path.includes("display.contentScalePercent"))).toBe(false);
+    expect(badIssues.some((issue) => issue.path.includes("display.contentScalePercent"))).toBe(true);
   });
 });

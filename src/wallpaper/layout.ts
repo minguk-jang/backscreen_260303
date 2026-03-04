@@ -21,7 +21,13 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function computeLayout(width: number, height: number, contentScale = 1): WallpaperLayout {
+export function computeLayout(
+  width: number,
+  height: number,
+  contentScale = 1,
+  offsetXPercent = 0,
+  offsetYPercent = 0
+): WallpaperLayout {
   const safe = {
     left: width * 0.12,
     top: height * 0.08,
@@ -36,7 +42,9 @@ export function computeLayout(width: number, height: number, contentScale = 1): 
     h: Math.max(260, height - safe.top - safe.bottom)
   };
 
-  const scale = clamp(contentScale, 0.8, 1.3);
+  const scale = clamp(contentScale, 0.5, 1.3);
+  const offsetX = clamp(offsetXPercent, -100, 100);
+  const offsetY = clamp(offsetYPercent, -100, 100);
   const minPadX = Math.max(12, width * 0.01);
   const minPadY = Math.max(12, height * 0.01);
   const maxContentW = Math.max(320, width - minPadX * 2);
@@ -46,10 +54,14 @@ export function computeLayout(width: number, height: number, contentScale = 1): 
   const scaledH = Math.min(maxContentH, baseContent.h * scale);
   const centeredX = baseContent.x + baseContent.w / 2 - scaledW / 2;
   const centeredY = baseContent.y + baseContent.h / 2 - scaledH / 2;
+  const halfShiftX = Math.max(0, (baseContent.w - scaledW) / 2);
+  const halfShiftY = Math.max(0, (baseContent.h - scaledH) / 2);
+  const positionedX = centeredX + halfShiftX * (offsetX / 100);
+  const positionedY = centeredY + halfShiftY * (offsetY / 100);
 
   const content: Rect = {
-    x: clamp(centeredX, minPadX, width - minPadX - scaledW),
-    y: clamp(centeredY, minPadY, height - minPadY - scaledH),
+    x: clamp(positionedX, minPadX, width - minPadX - scaledW),
+    y: clamp(positionedY, minPadY, height - minPadY - scaledH),
     w: scaledW,
     h: scaledH
   };

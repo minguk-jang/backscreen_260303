@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
@@ -371,6 +371,17 @@ export default function App() {
     }));
   };
 
+  const setDisplayOffsets = useCallback((offsetXPercent: number, offsetYPercent: number): void => {
+    setState((prev) => ({
+      ...prev,
+      display: {
+        ...prev.display,
+        offsetXPercent: Math.max(-100, Math.min(100, offsetXPercent)),
+        offsetYPercent: Math.max(-100, Math.min(100, offsetYPercent))
+      }
+    }));
+  }, []);
+
   const addMeal = (): void => {
     setState((prev) => ({
       ...prev,
@@ -679,6 +690,8 @@ export default function App() {
             currentClassLabel={currentClass ? `${currentClass.subject} 수업 중` : "수업 시간이 아닙니다"}
             monthMealsCount={monthlyMeals.length}
             monthEventsCount={monthlyEvents.length}
+            displaySettings={state.display}
+            onChangePosition={setDisplayOffsets}
           />
 
           <SetupChecklist
@@ -702,6 +715,9 @@ export default function App() {
             onChangeMonitorMode={(mode) => setDisplayField("monitorMode", mode)}
             onChangeMonitorId={(monitorId) => setDisplayField("monitorId", monitorId || undefined)}
             onChangeScale={(scalePercent) => setDisplayField("contentScalePercent", scalePercent)}
+            onResetPosition={() => {
+              setDisplayOffsets(0, 0);
+            }}
           />
 
           <ThemePanel theme={state.theme} onChangeTheme={setThemeField} />
@@ -847,7 +863,15 @@ function mergeWithDefaults(incoming: AppState): AppState {
       contentScalePercent:
         typeof incoming.display.contentScalePercent === "number"
           ? incoming.display.contentScalePercent
-          : next.display.contentScalePercent
+          : next.display.contentScalePercent,
+      offsetXPercent:
+        typeof incoming.display.offsetXPercent === "number"
+          ? incoming.display.offsetXPercent
+          : next.display.offsetXPercent,
+      offsetYPercent:
+        typeof incoming.display.offsetYPercent === "number"
+          ? incoming.display.offsetYPercent
+          : next.display.offsetYPercent
     };
   }
 

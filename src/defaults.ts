@@ -51,7 +51,9 @@ export const defaultState: AppState = {
   todos: [],
   display: {
     monitorMode: "primary",
-    contentScalePercent: 100
+    contentScalePercent: 100,
+    offsetXPercent: 0,
+    offsetYPercent: 0
   },
   mealImport: {},
   theme: {

@@ -65,7 +65,7 @@ describe("renderWallpaperImage", () => {
     const small = renderWallpaperImage(
       {
         ...defaultState,
-        display: { ...defaultState.display, contentScalePercent: 80 }
+        display: { ...defaultState.display, contentScalePercent: 50 }
       },
       1366,
       768
@@ -73,5 +73,23 @@ describe("renderWallpaperImage", () => {
 
     expect(large.startsWith("data:image/png;base64,")).toBe(true);
     expect(small.startsWith("data:image/png;base64,")).toBe(true);
+  });
+
+  it("renders safely with extreme drag offsets", () => {
+    const data = renderWallpaperImage(
+      {
+        ...defaultState,
+        display: {
+          ...defaultState.display,
+          contentScalePercent: 50,
+          offsetXPercent: 100,
+          offsetYPercent: -100
+        }
+      },
+      1366,
+      768
+    );
+
+    expect(data.startsWith("data:image/png;base64,")).toBe(true);
   });
 });
