@@ -48,6 +48,12 @@ export const defaultState: AppState = {
       color: "#d67a4f"
     }
   ],
+  todos: [],
+  display: {
+    monitorMode: "primary",
+    contentScalePercent: 100
+  },
+  mealImport: {},
   theme: {
     background: "#fff7ef",
     panel: "#fff1f5",

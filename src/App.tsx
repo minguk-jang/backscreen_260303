@@ -637,6 +637,41 @@ function mergeWithDefaults(incoming: AppState): AppState {
     }));
   }
 
+  if (Array.isArray(incoming.todos)) {
+    next.todos = incoming.todos.map((todo, index) => ({
+      id: todo.id ?? crypto.randomUUID(),
+      text: todo.text ?? "",
+      done: Boolean(todo.done),
+      order: Number.isFinite(todo.order) ? todo.order : index + 1,
+      createdAt: todo.createdAt ?? new Date().toISOString(),
+      doneAt: todo.doneAt
+    }));
+  }
+
+  if (incoming.display) {
+    next.display = {
+      monitorMode:
+        incoming.display.monitorMode === "all" ||
+        incoming.display.monitorMode === "primary" ||
+        incoming.display.monitorMode === "single"
+          ? incoming.display.monitorMode
+          : next.display.monitorMode,
+      monitorId: incoming.display.monitorId ?? next.display.monitorId,
+      contentScalePercent:
+        typeof incoming.display.contentScalePercent === "number"
+          ? incoming.display.contentScalePercent
+          : next.display.contentScalePercent
+    };
+  }
+
+  if (incoming.mealImport) {
+    next.mealImport = {
+      lastImportedAt: incoming.mealImport.lastImportedAt ?? next.mealImport.lastImportedAt,
+      lastSourceType: incoming.mealImport.lastSourceType ?? next.mealImport.lastSourceType,
+      lastFileName: incoming.mealImport.lastFileName ?? next.mealImport.lastFileName
+    };
+  }
+
   if (incoming.theme) {
     next.theme = {
       background: incoming.theme.background ?? next.theme.background,

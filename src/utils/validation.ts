@@ -25,6 +25,38 @@ function toMinute(text: string): number | null {
 export function validateState(state: AppState): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
+  if (
+    !Number.isFinite(state.display.contentScalePercent) ||
+    state.display.contentScalePercent < 80 ||
+    state.display.contentScalePercent > 130
+  ) {
+    issues.push({
+      path: "display.contentScalePercent",
+      message: "콘텐츠 크기(%)는 80~130 범위여야 합니다.",
+      fix: "디스플레이 설정에서 콘텐츠 크기를 80~130 사이로 조정해 주세요."
+    });
+  }
+
+  for (const todo of state.todos) {
+    if (!todo.text.trim()) {
+      issues.push({
+        path: `todos.${todo.id}.text`,
+        message: "할 일 텍스트가 비어 있습니다.",
+        fix: "할 일 내용을 입력해 주세요."
+      });
+      break;
+    }
+
+    if (todo.text.length > 120) {
+      issues.push({
+        path: `todos.${todo.id}.text`,
+        message: "할 일 텍스트가 너무 깁니다.",
+        fix: "120자 이내로 줄여 주세요."
+      });
+      break;
+    }
+  }
+
   for (const day of ["mon", "tue", "wed", "thu", "fri"] as Weekday[]) {
     const slots = [...state.timetable[day]].sort((a, b) => {
       const aMinute = toMinute(a.start) ?? 0;

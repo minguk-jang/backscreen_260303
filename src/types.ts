@@ -37,11 +37,37 @@ export interface EventEntry {
   color: string;
 }
 
+export interface TodoEntry {
+  id: string;
+  text: string;
+  done: boolean;
+  order: number;
+  createdAt: string;
+  doneAt?: string;
+}
+
+export type MonitorTargetMode = "all" | "primary" | "single";
+
+export interface DisplaySettings {
+  monitorMode: MonitorTargetMode;
+  monitorId?: string;
+  contentScalePercent: number;
+}
+
+export interface MealImportSettings {
+  lastImportedAt?: string;
+  lastSourceType?: "hwp" | "hwpx" | "pdf";
+  lastFileName?: string;
+}
+
 export interface AppState {
   schoolInfo: SchoolInfo;
   timetable: Timetable;
   meals: MealEntry[];
   events: EventEntry[];
+  todos: TodoEntry[];
+  display: DisplaySettings;
+  mealImport: MealImportSettings;
   theme: ThemeSettings;
   autoApplyEveryMinute: boolean;
 }
