@@ -30,8 +30,10 @@ beforeEach(() => {
 });
 
 describe("App layout", () => {
-  it("renders timetable collapsed helper text", () => {
+  it("does not render quick monthly editor and shows todo panel", () => {
     render(<App />);
+    expect(screen.queryByText("이번 달 빠른 수정")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Todo 관리" })).toBeInTheDocument();
     expect(screen.getByText("시간표는 학기 시작 시 1회 수정하면 됩니다.")).toBeInTheDocument();
   });
 

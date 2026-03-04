@@ -500,6 +500,43 @@ textarea {
   grid-template-columns: 1fr auto auto;
 }
 
+.todo-panel {
+  border-color: #efb4ca;
+}
+
+.todo-add-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.todo-add-row button {
+  width: auto;
+  min-width: 92px;
+  background: #f9d8e8;
+  color: #7e3456;
+  border-color: #e8b5ca;
+}
+
+.todo-item-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.todo-item-row > span {
+  font-size: 15px;
+  font-weight: 700;
+  color: #5d3c46;
+  word-break: break-word;
+}
+
+.todo-done {
+  color: #93757f;
+  text-decoration: line-through;
+}
+
 .setup-checklist {
   border-radius: 16px;
   border: 1px solid var(--line);
@@ -678,6 +715,7 @@ textarea {
   .day-tabs,
   .entity-head,
   .entity-head.two-row,
+  .todo-add-row,
   .timetable-row,
   .actions-row,
   .quick-summary-strip {

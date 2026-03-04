@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
-import { QuickMonthlyEditor } from "./components/QuickMonthlyEditor";
 import { SchoolInfoPanel } from "./components/SchoolInfoPanel";
 import { SetupChecklist } from "./components/SetupChecklist";
 import { StatusBar } from "./components/StatusBar";
 import { ThemePanel } from "./components/ThemePanel";
 import { TimetablePanel } from "./components/TimetablePanel";
+import { TodoPanel } from "./components/TodoPanel";
 import { UninstallPanel } from "./components/UninstallPanel";
 import { WallpaperPreviewPanel } from "./components/WallpaperPreviewPanel";
 import { defaultState } from "./defaults";
@@ -17,7 +17,8 @@ import { renderWallpaperImage } from "./renderWallpaper";
 import appIcon from "./icons/icon256.png";
 import type { AppState, EventEntry, MealEntry, TimetableSlot, Weekday } from "./types";
 import { buildSetupChecklist } from "./utils/checklist";
-import { filterEventsByMonth, filterMealsByMonth, upsertMealByDate } from "./utils/monthlyData";
+import { filterEventsByMonth, filterMealsByMonth } from "./utils/monthlyData";
+import { sortTodos } from "./utils/todos";
 import { validateState } from "./utils/validation";
 
 dayjs.locale("ko");
@@ -268,49 +269,38 @@ export default function App() {
     }));
   };
 
-  const onQuickAddEvent = (date: string, title: string): void => {
-    const trimmedTitle = title.trim();
-    if (!date || !trimmedTitle) {
-      setStatus("일정 날짜와 제목을 입력해 주세요.");
+  const onAddTodo = (text: string): void => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setStatus("할 일 내용을 입력해 주세요.");
       return;
     }
 
-    setState((prev) => ({
-      ...prev,
-      events: [
-        ...prev.events,
+    setState((prev) => {
+      const nextTodos = sortTodos([
+        ...prev.todos,
         {
           id: crypto.randomUUID(),
-          date,
-          title: trimmedTitle,
-          details: "",
-          color: "#f59e0b"
+          text: trimmed,
+          done: false,
+          order: prev.todos.length + 1,
+          createdAt: new Date().toISOString()
         }
-      ]
-    }));
-    setStatus("일정을 추가했습니다. 저장 버튼을 눌러 반영해 주세요.");
+      ]);
+      return {
+        ...prev,
+        todos: nextTodos
+      };
+    });
+    setStatus("할 일을 추가했습니다.");
   };
 
-  const onQuickAddMeal = (date: string, itemsText: string): void => {
-    const items = itemsText
-      .split("\n")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0);
-
-    if (!date || items.length === 0) {
-      setStatus("급식 날짜와 메뉴를 입력해 주세요.");
-      return;
-    }
-
+  const onDeleteTodo = (todoId: string): void => {
     setState((prev) => ({
       ...prev,
-      meals: upsertMealByDate(prev.meals, {
-        id: crypto.randomUUID(),
-        date,
-        items
-      })
+      todos: sortTodos(prev.todos.filter((todo) => todo.id !== todoId))
     }));
-    setStatus("급식을 추가/수정했습니다. 저장 버튼을 눌러 반영해 주세요.");
+    setStatus("할 일을 삭제했습니다.");
   };
 
   const saveState = async (message = "저장되었습니다."): Promise<void> => {
@@ -454,14 +444,6 @@ export default function App() {
 
       <main className="dashboard-grid">
         <section className="left-rail">
-          <QuickMonthlyEditor
-            monthKey={monthKey}
-            meals={monthlyMeals}
-            events={monthlyEvents}
-            onQuickAddEvent={onQuickAddEvent}
-            onQuickAddMeal={onQuickAddMeal}
-          />
-
           <section className="panel">
             <div className="panel-title-row">
               <h2>급식 메뉴</h2>
@@ -474,6 +456,8 @@ export default function App() {
               {state.meals.length === 0 && <p className="empty">등록된 급식이 없습니다.</p>}
             </div>
           </section>
+
+          <TodoPanel todos={state.todos} onAddTodo={onAddTodo} onDeleteTodo={onDeleteTodo} />
 
           <section className="panel">
             <div className="panel-title-row">
