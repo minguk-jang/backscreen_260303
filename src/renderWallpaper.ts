@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import type { AppState, EventEntry } from "./types";
+import type { AppState, EventEntry, TodoEntry } from "./types";
 import { getCurrentClass } from "./currentClass";
 import { weekdayOptions } from "./defaults";
 import { limitItems } from "./wallpaper/sectionCapacity";
@@ -351,6 +351,127 @@ function drawMealsSection(
   }
 }
 
+function sortTodosForWallpaper(todos: TodoEntry[]): TodoEntry[] {
+  return [...todos].sort((a, b) => {
+    const doneDelta = Number(a.done) - Number(b.done);
+    if (doneDelta !== 0) {
+      return doneDelta;
+    }
+
+    const orderDelta = a.order - b.order;
+    if (orderDelta !== 0) {
+      return orderDelta;
+    }
+
+    return a.createdAt.localeCompare(b.createdAt);
+  });
+}
+
+function drawTodoSection(
+  ctx: CanvasRenderingContext2D,
+  body: Rect,
+  state: AppState,
+  todos: TodoEntry[]
+): void {
+  ctx.fillStyle = `${state.theme.panelAlt}f1`;
+  roundRect(ctx, body.x, body.y, body.w, body.h, 10, true, false);
+
+  drawFittedText(ctx, {
+    text: "Todo",
+    x: body.x + 8,
+    y: body.y + 20,
+    maxWidth: body.w - 16,
+    maxFont: 18,
+    minFont: 12,
+    family: FONT_HEADING,
+    weight: 700,
+    color: state.theme.accent
+  });
+
+  const rowStartY = body.y + 38;
+  const rowGap = 5;
+  const rowH = 18;
+  const available = Math.max(0, body.h - (rowStartY - body.y) - 4);
+  const maxRows = Math.max(0, Math.floor((available + rowGap) / (rowH + rowGap)));
+  const source = todos.length > 0 ? todos : [{
+    id: "todo-empty",
+    text: "할 일 없음",
+    done: false,
+    order: 0,
+    createdAt: ""
+  }];
+  const limited = limitItems(source, maxRows);
+
+  let y = rowStartY;
+  for (const todo of limited.visible) {
+    const label = todo.done ? `완료 ${todo.text}` : todo.text;
+    drawFittedText(ctx, {
+      text: `• ${label}`,
+      x: body.x + 8,
+      y,
+      maxWidth: body.w - 16,
+      maxFont: 14,
+      minFont: 10,
+      family: FONT_BODY,
+      weight: 500,
+      color: todo.done ? darkenHex(state.theme.primaryText, -0.12) : state.theme.primaryText
+    });
+    y += rowH + rowGap;
+  }
+
+  if (limited.hidden > 0) {
+    drawFittedText(ctx, {
+      text: `+${limited.hidden}개 더 있음`,
+      x: body.x + 8,
+      y: Math.min(body.y + body.h - 4, y + 6),
+      maxWidth: body.w - 16,
+      maxFont: 13,
+      minFont: 10,
+      family: FONT_BODY,
+      weight: 500,
+      color: darkenHex(state.theme.primaryText, 0.08)
+    });
+  }
+}
+
+function drawMealsAndTodoSection(
+  ctx: CanvasRenderingContext2D,
+  body: Rect,
+  state: AppState,
+  now: dayjs.Dayjs,
+  mealsTodayItems: string[],
+  todos: TodoEntry[]
+): void {
+  if (body.h < 150) {
+    drawMealsSection(ctx, body, state, now, mealsTodayItems);
+    return;
+  }
+
+  const gap = Math.max(8, Math.min(14, body.h * 0.03));
+  const minTodoH = 74;
+  const maxTodoH = 120;
+  const desiredTodoH = body.h * 0.33;
+  const todoH = Math.max(minTodoH, Math.min(maxTodoH, desiredTodoH));
+  const mealsH = Math.max(80, body.h - todoH - gap);
+
+  const mealsRect: Rect = {
+    x: body.x,
+    y: body.y,
+    w: body.w,
+    h: mealsH
+  };
+
+  const todoRect: Rect = {
+    x: body.x,
+    y: body.y + mealsH + gap,
+    w: body.w,
+    h: body.h - mealsH - gap
+  };
+
+  drawMealsSection(ctx, mealsRect, state, now, mealsTodayItems);
+  drawTodoSection(ctx, todoRect, state, todos);
+}
+
 function buildCalendarCells(now: dayjs.Dayjs, eventDates: Set<string>): CalendarCell[] {
   const monthStart = now.startOf("month");
   const gridStart = monthStart.startOf("week");
@@ -557,6 +678,7 @@ export function renderWallpaperImage(state: AppState, width: number, height: num
 
   const mealsToday = state.meals.find((entry) => entry.date === today);
   const mealsTodayItems = mealsToday ? safeList(mealsToday.items) : [];
+  const sortedTodos = sortTodosForWallpaper(state.todos);
   const monthlyEvents = state.events
     .filter((entry) => entry.date.startsWith(monthKey))
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -575,7 +697,7 @@ export function renderWallpaperImage(state: AppState, width: number, height: num
   const eventsBody = drawPanelShell(ctx, layout.columns[2], "학교 교육 활동", state.theme);
 
   drawTimetableSection(ctx, timetableBody, state, now);
-  drawMealsSection(ctx, mealsBody, state, now, mealsTodayItems);
+  drawMealsAndTodoSection(ctx, mealsBody, state, now, mealsTodayItems, sortedTodos);
   drawEventsSection(ctx, eventsBody, state, now, monthlyEvents);
 
   return canvas.toDataURL("image/png");
