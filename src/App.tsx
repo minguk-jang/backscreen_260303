@@ -383,13 +383,20 @@ export default function App() {
   };
 
   const applyWallpaper = async (snapshot: AppState): Promise<void> => {
-    const size = await invoke<ScreenSize>("get_primary_screen_size");
+    const size = await invoke<ScreenSize>("get_primary_screen_size", {
+      monitorMode: snapshot.display.monitorMode,
+      monitorId: snapshot.display.monitorId ?? null
+    });
     const dataUrl = renderWallpaperImage(snapshot, size.width, size.height);
     const pngBase64 = dataUrl.split(",")[1];
     if (!pngBase64) {
       throw new Error("이미지 인코딩 실패");
     }
-    await invoke("apply_wallpaper_image", { pngBase64 });
+    await invoke("apply_wallpaper_image", {
+      pngBase64,
+      monitorMode: snapshot.display.monitorMode,
+      monitorId: snapshot.display.monitorId ?? null
+    });
     setHasAppliedOnce(true);
   };
 

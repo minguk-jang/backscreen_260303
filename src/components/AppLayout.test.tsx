@@ -25,6 +25,9 @@ beforeEach(() => {
     if (command === "load_app_state") {
       return Promise.resolve(defaultState);
     }
+    if (command === "get_primary_screen_size") {
+      return Promise.resolve({ width: 1366, height: 768 });
+    }
     return Promise.resolve(undefined);
   });
 });
@@ -45,6 +48,23 @@ describe("App layout", () => {
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith("uninstall_app", { confirmText: "삭제" });
+    });
+  });
+
+  it("passes display target payload when applying wallpaper", async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "지금 배경 적용" }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        "apply_wallpaper_image",
+        expect.objectContaining({
+          pngBase64: expect.any(String),
+          monitorMode: "primary",
+          monitorId: null
+        })
+      );
     });
   });
 });

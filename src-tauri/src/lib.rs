@@ -10,6 +10,8 @@ use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
 
 mod uninstall_state;
+mod display_target;
+use display_target::{resolve_target_monitor_id, MonitorRef};
 use uninstall_state::SystemState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +87,14 @@ struct ScreenSize {
     height: u32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DisplayMonitor {
+    id: String,
+    name: String,
+    is_primary: bool,
+}
+
 #[tauri::command]
 fn load_app_state(app: AppHandle) -> Result<AppState, String> {
     let connection = open_connection(&app)?;
@@ -123,12 +133,44 @@ fn save_app_state(app: AppHandle, state: AppState) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_primary_screen_size(app: AppHandle) -> Result<ScreenSize, String> {
-    let monitor = app
-        .primary_monitor()
-        .map_err(to_err)?
-        .ok_or_else(|| "기본 모니터를 찾을 수 없습니다".to_string())?;
-    let size = monitor.size();
+fn list_display_monitors(app: AppHandle) -> Result<Vec<DisplayMonitor>, String> {
+    list_monitors(&app)
+}
+
+#[tauri::command]
+fn get_primary_screen_size(
+    app: AppHandle,
+    monitor_mode: Option<String>,
+    monitor_id: Option<String>,
+) -> Result<ScreenSize, String> {
+    let monitors = list_monitors(&app)?;
+    let monitor_refs: Vec<MonitorRef> = monitors
+        .iter()
+        .map(|monitor| MonitorRef {
+            id: monitor.id.clone(),
+            is_primary: monitor.is_primary,
+        })
+        .collect();
+
+    let selected_id = resolve_target_monitor_id(
+        monitor_mode.as_deref().unwrap_or("primary"),
+        monitor_id.as_deref(),
+        &monitor_refs,
+    );
+
+    let available = app.available_monitors().map_err(to_err)?;
+    if available.is_empty() {
+        return Err("모니터 정보를 찾을 수 없습니다.".to_string());
+    }
+
+    let selected_idx = selected_id
+        .as_deref()
+        .and_then(|id| parse_monitor_id(id))
+        .filter(|idx| *idx < available.len())
+        .unwrap_or(0);
+
+    let target = &available[selected_idx];
+    let size = target.size();
 
     Ok(ScreenSize {
         width: size.width,
@@ -137,7 +179,12 @@ fn get_primary_screen_size(app: AppHandle) -> Result<ScreenSize, String> {
 }
 
 #[tauri::command]
-fn apply_wallpaper_image(app: AppHandle, png_base64: String) -> Result<(), String> {
+fn apply_wallpaper_image(
+    app: AppHandle,
+    png_base64: String,
+    monitor_mode: Option<String>,
+    monitor_id: Option<String>,
+) -> Result<(), String> {
     let _ = capture_original_wallpaper_once(&app);
 
     let image_bytes = base64::engine::general_purpose::STANDARD
@@ -154,7 +201,7 @@ fn apply_wallpaper_image(app: AppHandle, png_base64: String) -> Result<(), Strin
         .save_with_format(&wallpaper_path, image::ImageFormat::Bmp)
         .map_err(to_err)?;
 
-    apply_wallpaper_os(&wallpaper_path)
+    apply_wallpaper_os(&wallpaper_path, monitor_mode.as_deref(), monitor_id.as_deref())
 }
 
 #[tauri::command]
@@ -167,6 +214,53 @@ fn uninstall_app(app: AppHandle, confirm_text: String) -> Result<(), String> {
     launch_uninstaller()?;
     app.exit(0);
     Ok(())
+}
+
+fn parse_monitor_id(id: &str) -> Option<usize> {
+    id.strip_prefix("monitor-")
+        .and_then(|value| value.parse::<usize>().ok())
+        .and_then(|value| value.checked_sub(1))
+}
+
+fn list_monitors(app: &AppHandle) -> Result<Vec<DisplayMonitor>, String> {
+    let primary = app.primary_monitor().map_err(to_err)?;
+    let primary_signature = primary
+        .as_ref()
+        .map(monitor_signature);
+
+    let available = app.available_monitors().map_err(to_err)?;
+    let mut monitors = Vec::new();
+
+    for (index, monitor) in available.iter().enumerate() {
+        let id = format!("monitor-{}", index + 1);
+        let name = monitor
+            .name()
+            .cloned()
+            .unwrap_or_else(|| format!("모니터 {}", index + 1));
+        let signature = monitor_signature(monitor);
+        let is_primary = primary_signature
+            .as_ref()
+            .map(|primary_sig| *primary_sig == signature)
+            .unwrap_or(index == 0);
+
+        monitors.push(DisplayMonitor {
+            id,
+            name,
+            is_primary,
+        });
+    }
+
+    if !monitors.iter().any(|monitor| monitor.is_primary) && !monitors.is_empty() {
+        monitors[0].is_primary = true;
+    }
+
+    Ok(monitors)
+}
+
+fn monitor_signature(monitor: &tauri::Monitor) -> String {
+    let position = monitor.position();
+    let size = monitor.size();
+    format!("{}:{}:{}:{}", position.x, position.y, size.width, size.height)
 }
 
 fn open_connection(app: &AppHandle) -> Result<Connection, String> {
@@ -247,7 +341,7 @@ fn restore_original_wallpaper_if_available(app: &AppHandle) -> Result<(), String
         return Ok(());
     }
 
-    apply_wallpaper_os(&original)
+    apply_wallpaper_os(&original, None, None)
 }
 
 fn create_backup_snapshot(app: &AppHandle, state: &AppState) -> Result<(), String> {
@@ -316,7 +410,11 @@ fn launch_uninstaller() -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn apply_wallpaper_os(path: &Path) -> Result<(), String> {
+fn apply_wallpaper_os(
+    path: &Path,
+    _monitor_mode: Option<&str>,
+    _monitor_id: Option<&str>,
+) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         SystemParametersInfoW, SPI_SETDESKWALLPAPER, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE,
@@ -379,7 +477,11 @@ fn get_current_wallpaper_path_os() -> Result<Option<String>, String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn apply_wallpaper_os(_path: &Path) -> Result<(), String> {
+fn apply_wallpaper_os(
+    _path: &Path,
+    _monitor_mode: Option<&str>,
+    _monitor_id: Option<&str>,
+) -> Result<(), String> {
     Err("현재 OS에서는 실제 바탕화면 적용을 지원하지 않습니다. Windows에서 실행하세요.".to_string())
 }
 
@@ -529,6 +631,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_app_state,
             save_app_state,
+            list_display_monitors,
             get_primary_screen_size,
             apply_wallpaper_image,
             uninstall_app
