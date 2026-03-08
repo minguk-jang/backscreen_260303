@@ -5,6 +5,13 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"]
+    setupFiles: ["./src/test/setup.ts"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.git/**",
+      "**/.worktrees/**",
+      "**/src-tauri/target/**"
+    ]
   }
 });

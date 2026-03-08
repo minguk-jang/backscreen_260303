@@ -1,25 +1,15 @@
 # backscreen_260303
 
-윈도우 바탕화면에 날짜/시간, 현재 수업, 시간표, 급식, 일정을 자동으로 렌더링해 적용하는 데스크톱 앱입니다.
+교실 바탕화면에 날짜, 현재 수업, 시간표, 급식, 일정, Todo를 렌더링하고 Windows 배경으로 적용하는 Tauri 데스크톱 앱입니다.
 
 ## 핵심 기능
 
-- 비개발자용 가이드 대시보드 (초기 설정 체크리스트 + 진행률)
-- 월간 빠른 수정 패널 (일정/급식 즉시 추가)
-- 시간표 기본 접힘 UX (학기 초 1회 수정 중심)
-- 현재 수업 자동 판정 (교시 시간 기준)
-- 1분 주기 자동 바탕화면 갱신
-- 로컬 SQLite 저장 + 저장 시 JSON 백업 7개 유지
-- JSON 가져오기/내보내기
-- 트레이 상주 + 창 닫기 시 숨김
-- 설치형 배포(NSIS) 설정 포함
-- 앱 내 언인스톨 버튼(확인 입력) + 데이터 완전 삭제 정책
-
-## 기술 스택
-
-- Frontend: React + TypeScript + Vite
-- Desktop: Tauri v2
-- Backend: Rust + rusqlite + image
+- 현재 수업 자동 판정과 실시간 미리보기
+- 급식/행사/Todo 편집 및 JSON 가져오기/내보내기
+- 모니터 대상 선택, 콘텐츠 스케일, 미리보기 위치 조정
+- 1분 주기 자동 배경 적용
+- SQLite 저장과 JSON 백업 7개 유지
+- 트레이 상주, 위젯 창, 앱 내 제거 플로우
 
 ## 개발 실행
 
@@ -28,63 +18,57 @@ npm install
 npm run tauri dev
 ```
 
-## 테스트 실행
+## 검증 명령
 
 ```bash
 npm run test
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-## 사용 흐름 (비개발자 기준)
+## 현재 구조
 
-1. 상단 체크리스트를 보며 학교 정보, 이번 달 급식, 이번 달 일정을 순서대로 입력합니다.
-2. 왼쪽 `이번 달 빠른 수정`에서 일정/급식을 먼저 등록합니다.
-3. 오른쪽 패널에서 학교 정보와 테마를 설정합니다.
-4. 시간표는 기본 접힘 상태이며 필요할 때만 펼쳐 수정합니다.
-5. `저장 + 배경 적용`으로 즉시 반영합니다.
+### Frontend
 
-## 프로덕션 빌드
+- `src/App.tsx`: 앱 진입점
+- `src/app/`: 스튜디오 상태, 동기화, 앱 셸
+- `src/components/`: 패널과 편집 UI
+- `src/components/editors/`: 급식/행사 카드 편집기
+- `src/wallpaper/`: 레이아웃 계산과 렌더러
+- `src/styles/`: 목적별 CSS 레이어
+- `src/utils/`: 검증, 월간 데이터, Todo 정렬 등 순수 유틸
 
-```bash
-npm run tauri build
-```
+### Backend
 
-빌드 시 `src-tauri/tauri.conf.json`의 NSIS 설정을 사용해 Windows 설치형 산출물이 생성됩니다.
+- `src-tauri/src/app.rs`: Tauri builder 조립
+- `src-tauri/src/commands.rs`: 프론트에서 호출하는 command
+- `src-tauri/src/models.rs`: 직렬화 모델과 기본 상태
+- `src-tauri/src/persistence.rs`: SQLite 및 백업
+- `src-tauri/src/monitor.rs`: 모니터 선택/크기 계산
+- `src-tauri/src/wallpaper.rs`: 배경 적용/복원
+- `src-tauri/src/tray.rs`: 트레이와 위젯 창
+- `src-tauri/src/uninstall.rs`: 언인스톨 실행 경로
 
-## 비개발자 배포용 패키지 만들기
+## 문서
 
-### 권장: GitHub Actions로 Windows 설치파일 생성
+- [frontend.md](/Users/mingukjang/git/backscreen_260303/docs/architecture/frontend.md)
+- [backend.md](/Users/mingukjang/git/backscreen_260303/docs/architecture/backend.md)
+- `docs/plans/`: 설계/구현 기록
 
-- GitHub `Actions` -> `Build Windows Installer` -> `Run workflow`
-- 완료 후 Artifact에서 `BackScreen-Release-Package-v<version>.zip` 다운로드
-- zip 안의 `BackScreen_Setup_v<version>.exe`와 `INSTALL_GUIDE_KO.txt`를 전달
+500줄 제한은 사람이 관리하는 소스와 문서에 적용합니다. 생성물인 `dist`, `src-tauri/target`, 잠금 파일, 스키마 산출물은 제외합니다.
 
-### 로컬 Windows 빌드
+## 배포 관련
 
-```bash
-npm run tauri build
-npm run release:bundle -- 0.1.0
-```
-
-- 결과 폴더: `release/v0.1.0-YYYY-MM-DD/`
-- 전달 파일: `BackScreen_Setup_v0.1.0.exe` + `설치안내.txt`
-- 운영 가이드: `distribution/RELEASE_WORKFLOW_KO.md`
+- 설치형 빌드: `npm run tauri build`
+- 배포 번들: `npm run release:bundle -- 0.1.0`
+- 운영 가이드: [RELEASE_WORKFLOW_KO.md](/Users/mingukjang/git/backscreen_260303/distribution/RELEASE_WORKFLOW_KO.md)
+- 설치 안내: [INSTALL_GUIDE_KO.txt](/Users/mingukjang/git/backscreen_260303/distribution/INSTALL_GUIDE_KO.txt)
 
 ## 데이터 저장 위치
 
 Tauri 앱 데이터 디렉터리 하위 `backscreen` 폴더를 사용합니다.
 
-- `app.db`: 앱 상태 저장 SQLite
-- `backups/`: 저장 시 생성되는 JSON 스냅샷 (최대 7개)
+- `app.db`: 앱 상태 저장
+- `backups/`: 저장 시 생성되는 JSON 스냅샷
 - `wallpaper/current_wallpaper.bmp`: 마지막 적용된 배경 이미지
-
-## 제거 정책 (Windows)
-
-- 앱 내부 `앱 제거`에서 확인 입력 `삭제` 후 언인스톨러를 직접 실행합니다.
-- 제거 시 사용자 데이터(`app.db`, `backups/`, `wallpaper/`)는 완전 삭제됩니다.
-- 제거 전에 기존 바탕화면으로 원복을 시도합니다.
-
-## 1차 범위
-
-- 단일 PC 로컬 사용
-- 날씨 기능 제외
-- Windows 실제 배경 적용
+- `system_state.json`: 원본 배경 경로 등 시스템 상태

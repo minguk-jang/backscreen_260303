@@ -1,0 +1,99 @@
+@font-face {
+  font-family: "Jua";
+  src: url("../assets/fonts/Jua-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gowun Dodum";
+  src: url("../assets/fonts/GowunDodum-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-heading: "Jua", "Gowun Dodum", "Segoe UI", sans-serif;
+  --font-body: "Gowun Dodum", "Pretendard", "Segoe UI", sans-serif;
+  --bg-warm: #fff8ef;
+  --bg-peach: #ffe2cf;
+  --bg-rose: #ffcfe1;
+  --bg-mint: #dff5e8;
+  --surface: #fffcf8;
+  --surface-soft: #fff5f8;
+  --surface-muted: #fff0e7;
+  --line: #f1c3d1;
+  --line-strong: #de9bb8;
+  --text-main: #3d2c31;
+  --text-sub: #71565f;
+  --rose-main: #cc4c7d;
+  --rose-deep: #922952;
+  --shadow-soft: 0 24px 46px -30px rgba(127, 56, 90, 0.45);
+  --shadow-card: 0 18px 34px -26px rgba(111, 57, 79, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-main);
+  background:
+    radial-gradient(56% 36% at 7% 2%, rgba(255, 228, 169, 0.72) 0%, rgba(255, 228, 169, 0) 100%),
+    radial-gradient(48% 28% at 96% 8%, rgba(255, 187, 217, 0.62) 0%, rgba(255, 187, 217, 0) 100%),
+    radial-gradient(70% 48% at 50% 108%, rgba(201, 240, 219, 0.6) 0%, rgba(201, 240, 219, 0) 100%),
+    linear-gradient(180deg, #fff8f0 0%, #ffeef4 62%, #fff6eb 100%);
+}
+
+h1,
+h2,
+.setup-checklist strong,
+.header-time strong,
+.preview-stat strong {
+  font-family: var(--font-heading);
+  letter-spacing: 0.015em;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #63414b;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #dfbcc9;
+  border-radius: 11px;
+  padding: 10px 11px;
+  font: inherit;
+  color: #4e343a;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+.helper-text {
+  margin: 0 0 10px;
+  color: var(--text-sub);
+  font-size: 14px;
+  font-weight: 700;
+}

@@ -1,0 +1,88 @@
+@media (max-width: 1366px) {
+  .actions-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(320px, 1fr);
+  }
+}
+
+@media (max-width: 1120px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-checklist ul {
+    grid-template-columns: 1fr;
+  }
+
+  .field-grid.five-col {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .actions-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    padding: 14px 12px 24px;
+  }
+
+  .header-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-time {
+    text-align: left;
+  }
+
+  .field-grid.two-col,
+  .field-grid.five-col,
+  .timetable-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .field-grid.two-col,
+  .field-grid.five-col,
+  .day-tabs,
+  .entity-head,
+  .entity-head.two-row,
+  .todo-add-row,
+  .timetable-row,
+  .actions-row,
+  .quick-summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .inline-actions {
+    width: 100%;
+  }
+
+  .inline-actions button,
+  .panel-title-row button,
+  .quick-monthly-editor > button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

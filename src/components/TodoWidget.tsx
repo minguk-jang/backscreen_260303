@@ -2,6 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { emit, listen } from "@tauri-apps/api/event";
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
+import { mergeWithDefaults } from "../app/state";
+import { persistLocalState, restoreLocalState } from "../app/storage";
+import { LOCAL_STATE_SYNC_KEY } from "../app/sync";
+import type { WidgetStateSyncPayload } from "../app/types";
 import { defaultState } from "../defaults";
 import type { AppState, TodoEntry } from "../types";
 import { sortTodos, toggleTodo } from "../utils/todos";
@@ -10,46 +14,6 @@ interface TodoWidgetProps {
   todos?: TodoEntry[];
   mealsTodayItems?: string[];
   onToggleTodo?: (todoId: string, done: boolean) => void;
-}
-
-interface WidgetStateSyncPayload {
-  source: "studio" | "widget";
-  state: AppState;
-}
-
-const LOCAL_STATE_SYNC_KEY = "backscreen:state-sync";
-
-function mergeWidgetState(incoming: AppState): AppState {
-  return {
-    ...defaultState,
-    ...incoming,
-    schoolInfo: { ...defaultState.schoolInfo, ...(incoming.schoolInfo ?? {}) },
-    timetable: { ...defaultState.timetable, ...(incoming.timetable ?? {}) },
-    theme: { ...defaultState.theme, ...(incoming.theme ?? {}) },
-    meals: Array.isArray(incoming.meals) ? incoming.meals : defaultState.meals,
-    events: Array.isArray(incoming.events) ? incoming.events : defaultState.events,
-    todos: Array.isArray(incoming.todos) ? incoming.todos : defaultState.todos
-  };
-}
-
-function persistLocalState(state: AppState): void {
-  try {
-    window.localStorage.setItem(LOCAL_STATE_SYNC_KEY, JSON.stringify(state));
-  } catch {
-    // noop
-  }
-}
-
-function restoreLocalState(): AppState | null {
-  try {
-    const raw = window.localStorage.getItem(LOCAL_STATE_SYNC_KEY);
-    if (!raw) {
-      return null;
-    }
-    return JSON.parse(raw) as AppState;
-  } catch {
-    return null;
-  }
 }
 
 export function TodoWidget({ todos, mealsTodayItems, onToggleTodo }: TodoWidgetProps) {
@@ -68,7 +32,7 @@ export function TodoWidget({ todos, mealsTodayItems, onToggleTodo }: TodoWidgetP
         if (!active) {
           return;
         }
-        const next = mergeWidgetState(loaded);
+        const next = mergeWithDefaults(loaded);
         setState(next);
         persistLocalState(next);
         setStatus("실시간 체크 가능");
@@ -79,7 +43,7 @@ export function TodoWidget({ todos, mealsTodayItems, onToggleTodo }: TodoWidgetP
         }
         const localFallback = restoreLocalState();
         if (localFallback) {
-          setState(mergeWidgetState(localFallback));
+          setState(mergeWithDefaults(localFallback));
           setStatus("로컬 상태로 실행 중");
         } else {
           setStatus(`불러오기 실패: ${String(error)}`);
@@ -103,7 +67,7 @@ export function TodoWidget({ todos, mealsTodayItems, onToggleTodo }: TodoWidgetP
       if (!mounted || event.payload?.source !== "studio") {
         return;
       }
-      const next = mergeWidgetState(event.payload.state);
+      const next = mergeWithDefaults(event.payload.state);
       setState(next);
       persistLocalState(next);
       setStatus("스튜디오 변경 반영됨");
@@ -121,7 +85,7 @@ export function TodoWidget({ todos, mealsTodayItems, onToggleTodo }: TodoWidgetP
       }
       try {
         const incoming = JSON.parse(event.newValue) as AppState;
-        const next = mergeWidgetState(incoming);
+        const next = mergeWithDefaults(incoming);
         setState(next);
         setStatus("미리보기 동기화됨");
       } catch {
